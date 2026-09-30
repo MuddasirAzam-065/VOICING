@@ -139,3 +139,23 @@ def history(cid: str, user_id: str):
 def delete_conversation(cid: str, user_id: str):
     db.messages.delete_many({"cid": cid, "user_id": user_id})
     return {"deleted": True, "cid": cid}
+
+
+@app.get("/debug")
+def debug():
+    import traceback
+    from core import embed, search
+
+    out = {}
+    for name, fn in [
+        ("env", lambda: {k: bool(os.getenv(k)) for k in ["MONGO_URI", "HF_TOKEN"]}),
+        ("mongo", lambda: db.command("ping")["ok"]),
+        ("chunks_count", lambda: db.chunks.count_documents({})),
+        ("embed", lambda: len(embed(["test"], "query")[0])),
+        ("search", lambda: len(search("VoiceNG", "voiceng"))),
+    ]:
+        try:
+            out[name] = fn()
+        except Exception:
+            out[name] = "FAILED: " + traceback.format_exc()[-600:]
+    return out
