@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>VoiceNG Assistant</title>
+
+  <style>
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+      background: #f4f6f8;
+      color: #17202a;
+    }
+
+    .container {
+      width: min(
+        900px,
+        calc(100% - 30px)
+      );
+
+      margin: 40px auto;
+    }
+
+    h1 {
+      margin-bottom: 5px;
+    }
+
+    .subtitle {
+      color: #667085;
+      margin-top: 0;
+    }
+
+    .card {
+      background: white;
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow:
+        0 5px 20px
+        rgba(0, 0, 0, 0.08);
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    select,
+    input,
+    button {
+      font: inherit;
+    }
+
+    select,
+    input {
+      padding: 11px;
+      border: 1px solid #d0d5dd;
+      border-radius: 8px;
+    }
+
+    select {
+      flex: 1;
+    }
+
+    #messages {
+      min-height: 400px;
+      max-height: 600px;
+      overflow-y: auto;
+      padding: 10px 0;
+    }
+
+    .message {
+      margin: 10px 0;
+      padding: 12px 15px;
+      border-radius: 12px;
+      white-space: pre-wrap;
+    }
+
+    .user {
+      background: #e8f0ff;
+      margin-left: 20%;
+    }
+
+    .assistant {
+      background: #f1f3f5;
+      margin-right: 20%;
+    }
+
+    .composer {
+      display: flex;
+      gap: 8px;
+      margin-top: 15px;
+    }
+
+    #messageInput {
+      flex: 1;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 11px 15px;
+      cursor: pointer;
+      background: #0b5fff;
+      color: white;
+    }
+
+    button.secondary {
+      background: #475467;
+    }
+
+    button.recording {
+      background: #d92d20;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    #status {
+      margin-top: 10px;
+      color: #667085;
+      font-size: 14px;
+    }
+
+    .sources {
+      margin-top: 8px;
+      font-size: 13px;
+    }
+
+    .sources a {
+      display: block;
+      color: #0b5fff;
+      margin-top: 3px;
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>VoiceNG Assistant</h1>
+
+  <p class="subtitle">
+    Voice-enabled RAG assistant
+  </p>
+
+  <div class="card">
+
+    <div class="controls">
+
+      <select id="persona">
+
+        <option value="voiceng">
+          VoiceNG AI Assistant
+        </option>
+
+        <option value="fia">
+          FIA FAQ
+        </option>
+
+      </select>
+
+    </div>
+
+    <div id="messages"></div>
+
+    <div class="composer">
+
+      <input
+        id="messageInput"
+        placeholder="Ask something..."
+      >
+
+      <button
+        id="sendButton"
+      >
+        Send
+      </button>
+
+      <button
+        id="recordButton"
+        class="secondary"
+      >
+        🎙
+      </button>
+
+    </div>
+
+    <div id="status"></div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+const API_URL =
+  "https://YOUR-BACKEND.onrender.com";
+
+
+let cid = null;
+
+let mediaRecorder = null;
+
+let audioChunks = [];
+
+
+const messages =
+  document.getElementById("messages");
+
+const input =
+  document.getElementById("messageInput");
+
+const sendButton =
+  document.getElementById("sendButton");
+
+const recordButton =
+  document.getElementById("recordButton");
+
+const status =
+  document.getElementById("status");
+
+const persona =
+  document.getElementById("persona");
+
+
+function addMessage(
+  role,
+  text,
+  sources = []
+) {
+
+  const div =
+    document.createElement("div");
+
+  div.className =
+    `message ${role}`;
+
+  div.textContent = text;
+
+  messages.appendChild(div);
+
+
+  if (
+    role === "assistant" &&
+    sources.length
+  ) {
+
+    const sourceDiv =
+      document.createElement("div");
+
+    sourceDiv.className =
+      "sources";
+
+    sourceDiv.textContent =
+      "Sources:";
+
+    sources.forEach(url => {
+
+      const link =
+        document.createElement("a");
+
+      link.href = url;
+
+      link.target = "_blank";
+
+      link.rel = "noopener";
+
+      link.textContent = url;
+
+      sourceDiv.appendChild(link);
+
+    });
+
+    messages.appendChild(
+      sourceDiv
+    );
+  }
+
+
+  messages.scrollTop =
+    messages.scrollHeight;
+}
+
+
+async function sendMessage(text) {
+
+  text = text.trim();
+
+  if (!text) {
+    return;
+  }
+
+  addMessage(
+    "user",
+    text
+  );
+
+  input.value = "";
+
+  status.textContent =
+    "Thinking...";
+
+  sendButton.disabled = true;
+
+
+  try {
+
+    const response =
+      await fetch(
+        `${API_URL}/chat`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body: JSON.stringify({
+            cid: cid,
+            persona:
+              persona.value,
+            message: text
+          })
+        }
+      );
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        await response.text()
+      );
+    }
+
+
+    const data =
+      await response.json();
+
+
+    cid = data.cid;
+
+
+    addMessage(
+      "assistant",
+      data.answer,
+      data.sources || []
+    );
+
+
+    speak(data.answer);
+
+  }
+
+  catch (error) {
+
+    console.error(error);
+
+    addMessage(
+      "assistant",
+      "Sorry, something went wrong."
+    );
+
+  }
+
+  finally {
+
+    sendButton.disabled =
+      false;
+
+    status.textContent =
+      "";
+
+  }
+}
+
+
+sendButton.addEventListener(
+  "click",
+  () => {
+    sendMessage(
+      input.value
+    );
+  }
+);
+
+
+input.addEventListener(
+  "keydown",
+  event => {
+
+    if (
+      event.key === "Enter"
+    ) {
+
+      sendMessage(
+        input.value
+      );
+    }
+
+  }
+);
+
+
+function speak(text) {
+
+  if (
+    !("speechSynthesis" in window)
+  ) {
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+
+  const utterance =
+    new SpeechSynthesisUtterance(
+      text
+    );
+
+  utterance.rate = 1;
+
+  utterance.pitch = 1;
+
+  window.speechSynthesis.speak(
+    utterance
+  );
+}
+
+
+recordButton.addEventListener(
+  "click",
+  async () => {
+
+    if (mediaRecorder) {
+
+      mediaRecorder.stop();
+
+      return;
+    }
+
+
+    try {
+
+      const stream =
+        await navigator.mediaDevices
+          .getUserMedia({
+            audio: true
+          });
+
+
+      audioChunks = [];
+
+
+      mediaRecorder =
+        new MediaRecorder(
+          stream,
+          {
+            mimeType:
+              "audio/webm"
+          }
+        );
+
+
+      mediaRecorder.ondataavailable =
+        event => {
+
+          if (
+            event.data.size > 0
+          ) {
+
+            audioChunks.push(
+              event.data
+            );
+          }
+
+        };
+
+
+      mediaRecorder.onstop =
+        async () => {
+
+          stream
+            .getTracks()
+            .forEach(
+              track =>
+                track.stop()
+            );
+
+
+          recordButton
+            .classList
+            .remove(
+              "recording"
+            );
+
+
+          recordButton.textContent =
+            "🎙";
+
+
+          mediaRecorder =
+            null;
+
+
+          const blob =
+            new Blob(
+              audioChunks,
+              {
+                type:
+                  "audio/webm"
+              }
+            );
+
+
+          const form =
+            new FormData();
+
+
+          form.append(
+            "audio",
+            blob,
+            "recording.webm"
+          );
+
+
+          status.textContent =
+            "Transcribing...";
+
+
+          try {
+
+            const response =
+              await fetch(
+                `${API_URL}/stt`,
+                {
+                  method: "POST",
+                  body: form
+                }
+              );
+
+
+            if (!response.ok) {
+              throw new Error(
+                await response.text()
+              );
+            }
+
+
+            const data =
+              await response.json();
+
+
+            if (data.text) {
+
+              await sendMessage(
+                data.text
+              );
+
+            }
+
+          }
+
+          catch (error) {
+
+            console.error(error);
+
+            status.textContent =
+              "Transcription failed.";
+
+          }
+
+        };
+
+
+      mediaRecorder.start();
+
+
+      recordButton
+        .classList
+        .add(
+          "recording"
+        );
+
+
+      recordButton.textContent =
+        "⏹";
+
+
+      status.textContent =
+        "Recording...";
+
+    }
+
+    catch (error) {
+
+      console.error(error);
+
+      status.textContent =
+        "Microphone permission failed.";
+
+    }
+
+  }
+);
+
+</script>
+
+</body>
+
+</html>
