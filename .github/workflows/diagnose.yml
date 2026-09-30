@@ -1,0 +1,26 @@
+name: Diagnose backend
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      MONGO_URI: ${{ secrets.MONGO_URI }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: voiceng-bot/backend
+        run: pip install -r requirements.txt
+
+      - name: Run diagnostics
+        working-directory: voiceng-bot/backend
+        run: python -u test_local.py
