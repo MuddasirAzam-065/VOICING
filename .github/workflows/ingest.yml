@@ -2,8 +2,8 @@ name: Ingest knowledge base
 
 on:
   schedule:
-    - cron: "0 3 * * 0"        # every Sunday at 03:00 UTC
-  workflow_dispatch:            # adds a manual "Run workflow" button
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
     inputs:
       persona:
         description: "voiceng, fia or both"
@@ -11,16 +11,19 @@ on:
 
 concurrency:
   group: ingest
-  cancel-in-progress: false     # never run two ingests at once
+  cancel-in-progress: false
 
 jobs:
   ingest:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - name: Show repo layout
+        run: ls -R | head -50
+
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
