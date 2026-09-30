@@ -17,6 +17,11 @@ jobs:
   ingest:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      MONGO_URI: ${{ secrets.MONGO_URI }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      SITE_URL: ${{ secrets.SITE_URL }}
+      FIA_URL: ${{ secrets.FIA_URL }}
     steps:
       - uses: actions/checkout@v5
 
@@ -25,11 +30,9 @@ jobs:
         run: |
           FILE=$(find . -name ingest.py -not -path './.git/*' | head -1)
           if [ -z "$FILE" ]; then
-            echo "::error title=ingest.py not found::ingest.py is not in this branch. Push it to main."
-            find . -not -path './.git/*' -type f | head -40
+            echo "::error title=ingest.py not found::Push it to main."
             exit 1
           fi
-          echo "Found: $FILE"
           echo "dir=$(dirname "$FILE")" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-python@v6
@@ -38,22 +41,12 @@ jobs:
 
       - name: "2. Install dependencies"
         working-directory: ${{ steps.find.outputs.dir }}
-        run: |
-          ls -la
-          if [ ! -f requirements.txt ]; then
-            echo "::error title=requirements.txt missing::No requirements.txt in $(pwd)"
-            exit 1
-          fi
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: "3. Check secrets"
-        env:
-          MONGO_URI: ${{ secrets.MONGO_URI }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          SITE_URL: ${{ secrets.SITE_URL }}
         run: |
           MISSING=""
-          for v in MONGO_URI GEMINI_API_KEY SITE_URL; do
+          for v in MONGO_URI HF_TOKEN SITE_URL; do
             if [ -z "${!v}" ]; then MISSING="$MISSING $v"; fi
           done
           if [ -n "$MISSING" ]; then
@@ -62,16 +55,18 @@ jobs:
           fi
           echo "All required secrets are present."
 
-      - name: "4. Check MongoDB and Gemini connections"
+      - name: "4. Check MongoDB and embeddings"
         working-directory: ${{ steps.find.outputs.dir }}
-        env:
-          MONGO_URI: ${{ secrets.MONGO_URI }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          python -u - <<'EOF' 2>&1 | tee /tmp/check.log
+          python -u - <<'EOF'
           import sys, traceback
           try:
               from core import db, embed
+          except Exception:
+              print("IMPORT core.py: FAILED")
+              traceback.print_exc()
+              sys.exit(1)
+          try:
               db.command("ping")
               print("MongoDB: OK")
           except Exception:
@@ -79,22 +74,16 @@ jobs:
               traceback.print_exc()
               sys.exit(1)
           try:
-              v = embed(["test"], "RETRIEVAL_QUERY")
-              print("Gemini embeddings: OK, dim =", len(v[0]))
+              v = embed(["test"], "query")
+              print("HF embeddings: OK, dim =", len(v[0]))
           except Exception:
-              print("Gemini: FAILED")
+              print("HF embeddings: FAILED")
               traceback.print_exc()
               sys.exit(1)
           EOF
-          exit ${PIPESTATUS[0]}
 
       - name: "5. Run ingestion"
         working-directory: ${{ steps.find.outputs.dir }}
-        env:
-          MONGO_URI: ${{ secrets.MONGO_URI }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          SITE_URL: ${{ secrets.SITE_URL }}
-          FIA_URL: ${{ secrets.FIA_URL }}
         run: |
           set -o pipefail
           python -u ingest.py --persona "${{ inputs.persona || 'both' }}" 2>&1 | tee /tmp/ingest.log
@@ -104,10 +93,7 @@ jobs:
         run: |
           {
             echo "## Ingestion failed"
-            echo "Last lines of output:"
             echo '```'
-            tail -n 25 /tmp/ingest.log 2>/dev/null || tail -n 25 /tmp/check.log 2>/dev/null || echo "See the failed step above."
+            tail -n 25 /tmp/ingest.log 2>/dev/null || echo "See the failed step above."
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          LAST=$(tail -n 3 /tmp/ingest.log 2>/dev/null || tail -n 3 /tmp/check.log 2>/dev/null)
-          echo "::error title=Ingestion failed::$LAST"
