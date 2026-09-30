@@ -29,150 +29,629 @@
 
       background: #f4f6f8;
       color: #17202a;
+      height: 100vh;
+      overflow: hidden;
     }
 
-    .container {
-      width: min(
-        900px,
-        calc(100% - 30px)
-      );
+    /* =========================
+       APP LAYOUT
+       ========================= */
 
-      margin: 40px auto;
-    }
-
-    h1 {
-      margin-bottom: 5px;
-    }
-
-    .subtitle {
-      color: #667085;
-      margin-top: 0;
-    }
-
-    .card {
-      background: white;
-      border-radius: 14px;
-      padding: 20px;
-      box-shadow:
-        0 5px 20px
-        rgba(0, 0, 0, 0.08);
-    }
-
-    .controls {
+    .app {
       display: flex;
-      gap: 10px;
-      margin-bottom: 15px;
+      height: 100vh;
+      width: 100%;
     }
 
-    select,
-    input,
-    button {
+
+    /* =========================
+       SIDEBAR
+       ========================= */
+
+    .sidebar {
+      width: 280px;
+      min-width: 280px;
+
+      background: #ffffff;
+
+      border-right:
+        1px solid #e4e7ec;
+
+      display: flex;
+      flex-direction: column;
+    }
+
+
+    .sidebar-header {
+      padding: 20px;
+      border-bottom:
+        1px solid #e4e7ec;
+    }
+
+
+    .brand {
+      margin: 0 0 4px 0;
+      font-size: 21px;
+      font-weight: 700;
+    }
+
+
+    .brand-subtitle {
+      margin: 0;
+      color: #667085;
+      font-size: 13px;
+    }
+
+
+    .new-chat {
+      width: 100%;
+      margin-top: 16px;
+
+      background: #0b5fff;
+      color: white;
+
+      border: 0;
+      border-radius: 9px;
+
+      padding: 11px 14px;
+
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+
+    .new-chat:hover {
+      opacity: 0.92;
+    }
+
+
+    .history-title {
+      padding:
+        16px 20px 8px;
+
+      font-size: 12px;
+      font-weight: 700;
+
+      color: #667085;
+
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+
+    #conversationList {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 10px 15px;
+    }
+
+
+    .conversation {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      padding: 10px;
+
+      border-radius: 9px;
+
+      cursor: pointer;
+
+      margin-bottom: 3px;
+    }
+
+
+    .conversation:hover {
+      background: #f2f4f7;
+    }
+
+
+    .conversation.active {
+      background: #e8f0ff;
+    }
+
+
+    .conversation-content {
+      min-width: 0;
+      flex: 1;
+    }
+
+
+    .conversation-message {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+
+      font-size: 14px;
+      color: #344054;
+    }
+
+
+    .conversation-meta {
+      margin-top: 3px;
+
+      font-size: 11px;
+      color: #98a2b3;
+    }
+
+
+    .delete-conversation {
+      flex-shrink: 0;
+
+      border: 0;
+      background: transparent;
+
+      color: #98a2b3;
+
+      padding: 5px;
+      border-radius: 6px;
+
+      cursor: pointer;
+    }
+
+
+    .delete-conversation:hover {
+      background: #fee4e2;
+      color: #d92d20;
+    }
+
+
+    .empty-history {
+      padding: 20px 10px;
+
+      color: #98a2b3;
+
+      text-align: center;
+
+      font-size: 13px;
+    }
+
+
+    /* =========================
+       MAIN
+       ========================= */
+
+    .main {
+      flex: 1;
+      min-width: 0;
+
+      display: flex;
+      flex-direction: column;
+    }
+
+
+    .topbar {
+      height: 70px;
+
+      background: white;
+
+      border-bottom:
+        1px solid #e4e7ec;
+
+      display: flex;
+      align-items: center;
+
+      padding:
+        0 24px;
+
+      gap: 12px;
+    }
+
+
+    .mobile-history-button {
+      display: none;
+
+      border: 0;
+      background: #f2f4f7;
+
+      color: #344054;
+
+      border-radius: 8px;
+
+      padding: 9px 12px;
+
+      cursor: pointer;
+    }
+
+
+    .topbar-title {
+      flex: 1;
+
+      font-size: 18px;
+      font-weight: 650;
+    }
+
+
+    .persona-select {
+      padding: 9px 11px;
+
+      border:
+        1px solid #d0d5dd;
+
+      border-radius: 8px;
+
+      background: white;
+
       font: inherit;
     }
 
-    select,
-    input {
-      padding: 11px;
-      border: 1px solid #d0d5dd;
-      border-radius: 8px;
+
+    /* =========================
+       CHAT AREA
+       ========================= */
+
+    .chat-wrapper {
+      flex: 1;
+
+      display: flex;
+      flex-direction: column;
+
+      min-height: 0;
+
+      width: min(
+        950px,
+        100%
+      );
+
+      margin: 0 auto;
+
+      padding:
+        20px 24px 18px;
     }
 
-    select {
-      flex: 1;
-    }
 
     #messages {
-      min-height: 400px;
-      max-height: 600px;
+      flex: 1;
+
+      min-height: 0;
+
       overflow-y: auto;
-      padding: 10px 0;
+
+      padding:
+        5px 0 15px;
     }
 
-    .message {
-      margin: 10px 0;
-      padding: 12px 15px;
-      border-radius: 12px;
-      white-space: pre-wrap;
+
+    .welcome {
+      height: 100%;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      text-align: center;
+
+      color: #667085;
     }
+
+
+    .welcome-inner {
+      max-width: 550px;
+    }
+
+
+    .welcome h2 {
+      color: #17202a;
+      margin-bottom: 8px;
+    }
+
+
+    .welcome p {
+      margin-top: 0;
+    }
+
+
+    .message {
+      margin: 12px 0;
+
+      padding:
+        12px 15px;
+
+      border-radius: 12px;
+
+      white-space: pre-wrap;
+
+      line-height: 1.5;
+
+      max-width: 78%;
+    }
+
 
     .user {
       background: #e8f0ff;
-      margin-left: 20%;
+      margin-left: auto;
     }
 
+
     .assistant {
-      background: #f1f3f5;
-      margin-right: 20%;
+      background: white;
+
+      border:
+        1px solid #eaecf0;
+
+      margin-right: auto;
     }
+
+
+    .sources {
+      margin-top: 7px;
+
+      font-size: 12px;
+
+      max-width: 78%;
+    }
+
+
+    .sources-title {
+      font-weight: 600;
+      margin-bottom: 3px;
+    }
+
+
+    .sources a {
+      display: block;
+
+      color: #0b5fff;
+
+      margin-top: 3px;
+
+      overflow-wrap: anywhere;
+    }
+
+
+    /* =========================
+       COMPOSER
+       ========================= */
 
     .composer {
       display: flex;
+
       gap: 8px;
-      margin-top: 15px;
+
+      padding-top: 10px;
     }
+
 
     #messageInput {
       flex: 1;
+
+      min-width: 0;
+
+      padding:
+        12px 13px;
+
+      border:
+        1px solid #d0d5dd;
+
+      border-radius: 9px;
+
+      outline: none;
+
+      font: inherit;
     }
 
+
+    #messageInput:focus {
+      border-color: #0b5fff;
+
+      box-shadow:
+        0 0 0 3px
+        rgba(11, 95, 255, 0.1);
+    }
+
+
     button {
+      font: inherit;
+
       border: 0;
-      border-radius: 8px;
-      padding: 11px 15px;
+
+      border-radius: 9px;
+
+      padding:
+        11px 15px;
+
       cursor: pointer;
+    }
+
+
+    #sendButton {
       background: #0b5fff;
       color: white;
     }
 
+
     button.secondary {
       background: #475467;
+      color: white;
     }
+
 
     button.recording {
       background: #d92d20;
     }
+
 
     button:disabled {
       opacity: 0.6;
       cursor: not-allowed;
     }
 
-    #status {
-      margin-top: 10px;
-      color: #667085;
-      font-size: 14px;
-    }
 
-    .sources {
-      margin-top: 8px;
+    #status {
+      min-height: 20px;
+
+      margin-top: 7px;
+
+      color: #667085;
+
       font-size: 13px;
     }
 
-    .sources a {
-      display: block;
-      color: #0b5fff;
-      margin-top: 3px;
+
+    /* =========================
+       MOBILE
+       ========================= */
+
+    @media (max-width: 760px) {
+
+      body {
+        overflow: hidden;
+      }
+
+
+      .sidebar {
+        position: fixed;
+
+        left: 0;
+        top: 0;
+        bottom: 0;
+
+        z-index: 100;
+
+        transform:
+          translateX(-100%);
+
+        transition:
+          transform 0.2s ease;
+
+        box-shadow:
+          5px 0 20px
+          rgba(0, 0, 0, 0.12);
+      }
+
+
+      .sidebar.open {
+        transform:
+          translateX(0);
+      }
+
+
+      .mobile-history-button {
+        display: block;
+      }
+
+
+      .topbar {
+        padding:
+          0 12px;
+      }
+
+
+      .topbar-title {
+        font-size: 16px;
+      }
+
+
+      .persona-select {
+        max-width: 145px;
+      }
+
+
+      .chat-wrapper {
+        padding:
+          12px 12px 10px;
+      }
+
+
+      .message {
+        max-width: 90%;
+      }
+
+
+      .sources {
+        max-width: 90%;
+      }
+
+
+      #sendButton {
+        padding:
+          11px 13px;
+      }
+
     }
 
   </style>
 
 </head>
 
+
 <body>
 
-<div class="container">
+<div class="app">
 
-  <h1>VoiceNG Assistant</h1>
 
-  <p class="subtitle">
-    Voice-enabled RAG assistant
-  </p>
+  <!-- =========================
+       SIDEBAR
+       ========================= -->
 
-  <div class="card">
+  <aside
+    id="sidebar"
+    class="sidebar"
+  >
 
-    <div class="controls">
+    <div class="sidebar-header">
 
-      <select id="persona">
+      <h1 class="brand">
+        VoiceNG
+      </h1>
+
+      <p class="brand-subtitle">
+        AI Assistant
+      </p>
+
+
+      <button
+        id="newChatButton"
+        class="new-chat"
+      >
+        + New Chat
+      </button>
+
+    </div>
+
+
+    <div class="history-title">
+      Conversation History
+    </div>
+
+
+    <div id="conversationList">
+
+      <div class="empty-history">
+        Loading history...
+      </div>
+
+    </div>
+
+  </aside>
+
+
+  <!-- =========================
+       MAIN
+       ========================= -->
+
+  <main class="main">
+
+
+    <header class="topbar">
+
+      <button
+        id="mobileHistoryButton"
+        class="mobile-history-button"
+      >
+        ☰
+      </button>
+
+
+      <div class="topbar-title">
+        VoiceNG Assistant
+      </div>
+
+
+      <select
+        id="persona"
+        class="persona-select"
+      >
 
         <option value="voiceng">
           VoiceNG AI Assistant
@@ -184,44 +663,92 @@
 
       </select>
 
+    </header>
+
+
+    <div class="chat-wrapper">
+
+
+      <div id="messages">
+
+        <div class="welcome">
+
+          <div class="welcome-inner">
+
+            <h2>
+              How can I help you?
+            </h2>
+
+            <p>
+              Ask a question using text
+              or your microphone.
+            </p>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="composer">
+
+        <input
+          id="messageInput"
+          placeholder="Ask something..."
+          autocomplete="off"
+        >
+
+
+        <button
+          id="sendButton"
+        >
+          Send
+        </button>
+
+
+        <button
+          id="recordButton"
+          class="secondary"
+          title="Record voice"
+        >
+          🎙
+        </button>
+
+      </div>
+
+
+      <div id="status"></div>
+
     </div>
 
-    <div id="messages"></div>
-
-    <div class="composer">
-
-      <input
-        id="messageInput"
-        placeholder="Ask something..."
-      >
-
-      <button
-        id="sendButton"
-      >
-        Send
-      </button>
-
-      <button
-        id="recordButton"
-        class="secondary"
-      >
-        🎙
-      </button>
-
-    </div>
-
-    <div id="status"></div>
-
-  </div>
+  </main>
 
 </div>
 
 
 <script>
 
+/* =====================================================
+   CONFIGURATION
+   ===================================================== */
+
+/*
+ * Change this after your Render backend is deployed.
+ *
+ * Example:
+ *
+ * const API_URL =
+ *   "https://voiceng-api.onrender.com";
+ */
+
 const API_URL =
   "https://YOUR-BACKEND.onrender.com";
 
+
+/* =====================================================
+   STATE
+   ===================================================== */
 
 let cid = null;
 
@@ -230,24 +757,123 @@ let mediaRecorder = null;
 let audioChunks = [];
 
 
+/* =====================================================
+   DOM
+   ===================================================== */
+
 const messages =
-  document.getElementById("messages");
+  document.getElementById(
+    "messages"
+  );
+
 
 const input =
-  document.getElementById("messageInput");
+  document.getElementById(
+    "messageInput"
+  );
+
 
 const sendButton =
-  document.getElementById("sendButton");
+  document.getElementById(
+    "sendButton"
+  );
+
 
 const recordButton =
-  document.getElementById("recordButton");
+  document.getElementById(
+    "recordButton"
+  );
+
 
 const status =
-  document.getElementById("status");
+  document.getElementById(
+    "status"
+  );
+
 
 const persona =
-  document.getElementById("persona");
+  document.getElementById(
+    "persona"
+  );
 
+
+const conversationList =
+  document.getElementById(
+    "conversationList"
+  );
+
+
+const newChatButton =
+  document.getElementById(
+    "newChatButton"
+  );
+
+
+const sidebar =
+  document.getElementById(
+    "sidebar"
+  );
+
+
+const mobileHistoryButton =
+  document.getElementById(
+    "mobileHistoryButton"
+  );
+
+
+/* =====================================================
+   HELPERS
+   ===================================================== */
+
+function escapeDate(value) {
+
+  if (!value) {
+    return "";
+  }
+
+  try {
+
+    return new Date(value)
+      .toLocaleString();
+
+  }
+
+  catch {
+
+    return "";
+
+  }
+
+}
+
+
+function clearMessages() {
+
+  messages.innerHTML = "";
+
+}
+
+
+function showWelcome() {
+
+  messages.innerHTML = `
+    <div class="welcome">
+      <div class="welcome-inner">
+        <h2>How can I help you?</h2>
+        <p>
+          Ask a question using text
+          or your microphone.
+        </p>
+      </div>
+    </div>
+  `;
+
+}
+
+
+/* =====================================================
+   DISPLAY MESSAGE
+   ===================================================== */
 
 function addMessage(
   role,
@@ -255,15 +881,38 @@ function addMessage(
   sources = []
 ) {
 
+  /*
+   * Remove welcome screen
+   * when the first message arrives.
+   */
+
+  const welcome =
+    messages.querySelector(
+      ".welcome"
+    );
+
+  if (welcome) {
+    welcome.remove();
+  }
+
+
   const div =
-    document.createElement("div");
+    document.createElement(
+      "div"
+    );
+
 
   div.className =
     `message ${role}`;
 
-  div.textContent = text;
 
-  messages.appendChild(div);
+  div.textContent =
+    text;
+
+
+  messages.appendChild(
+    div
+  );
 
 
   if (
@@ -272,61 +921,529 @@ function addMessage(
   ) {
 
     const sourceDiv =
-      document.createElement("div");
+      document.createElement(
+        "div"
+      );
+
 
     sourceDiv.className =
       "sources";
 
-    sourceDiv.textContent =
+
+    const title =
+      document.createElement(
+        "div"
+      );
+
+
+    title.className =
+      "sources-title";
+
+
+    title.textContent =
       "Sources:";
 
-    sources.forEach(url => {
 
-      const link =
-        document.createElement("a");
+    sourceDiv.appendChild(
+      title
+    );
 
-      link.href = url;
 
-      link.target = "_blank";
+    sources.forEach(
+      url => {
 
-      link.rel = "noopener";
+        const link =
+          document.createElement(
+            "a"
+          );
 
-      link.textContent = url;
 
-      sourceDiv.appendChild(link);
+        link.href =
+          url;
 
-    });
+
+        link.target =
+          "_blank";
+
+
+        link.rel =
+          "noopener noreferrer";
+
+
+        link.textContent =
+          url;
+
+
+        sourceDiv.appendChild(
+          link
+        );
+
+      }
+    );
+
 
     messages.appendChild(
       sourceDiv
     );
+
   }
 
 
   messages.scrollTop =
     messages.scrollHeight;
+
 }
 
 
-async function sendMessage(text) {
+/* =====================================================
+   LOAD CONVERSATION HISTORY
+   ===================================================== */
 
-  text = text.trim();
+async function loadConversations() {
+
+  try {
+
+    const response =
+      await fetch(
+        `${API_URL}/conversations`
+      );
+
+
+    if (!response.ok) {
+      throw new Error(
+        "Failed to load conversations"
+      );
+    }
+
+
+    const conversations =
+      await response.json();
+
+
+    conversationList.innerHTML =
+      "";
+
+
+    if (
+      !conversations.length
+    ) {
+
+      conversationList.innerHTML = `
+        <div class="empty-history">
+          No conversations yet.
+        </div>
+      `;
+
+      return;
+
+    }
+
+
+    conversations.forEach(
+      conversation => {
+
+        const item =
+          document.createElement(
+            "div"
+          );
+
+
+        item.className =
+          "conversation";
+
+
+        if (
+          conversation.cid === cid
+        ) {
+
+          item.classList.add(
+            "active"
+          );
+
+        }
+
+
+        /* Conversation text */
+
+        const content =
+          document.createElement(
+            "div"
+          );
+
+
+        content.className =
+          "conversation-content";
+
+
+        const message =
+          document.createElement(
+            "div"
+          );
+
+
+        message.className =
+          "conversation-message";
+
+
+        message.textContent =
+          conversation.last_message ||
+          "New conversation";
+
+
+        const meta =
+          document.createElement(
+            "div"
+          );
+
+
+        meta.className =
+          "conversation-meta";
+
+
+        meta.textContent =
+          `${conversation.persona || ""} • ${
+            escapeDate(
+              conversation.created_at
+            )
+          }`;
+
+
+        content.appendChild(
+          message
+        );
+
+
+        content.appendChild(
+          meta
+        );
+
+
+        /* Delete button */
+
+        const deleteButton =
+          document.createElement(
+            "button"
+          );
+
+
+        deleteButton.className =
+          "delete-conversation";
+
+
+        deleteButton.textContent =
+          "🗑";
+
+
+        deleteButton.title =
+          "Delete conversation";
+
+
+        deleteButton.addEventListener(
+          "click",
+          event => {
+
+            event.stopPropagation();
+
+            deleteConversation(
+              conversation.cid
+            );
+
+          }
+        );
+
+
+        item.appendChild(
+          content
+        );
+
+
+        item.appendChild(
+          deleteButton
+        );
+
+
+        /* Open conversation */
+
+        item.addEventListener(
+          "click",
+          () => {
+
+            loadConversation(
+              conversation.cid,
+              conversation.persona
+            );
+
+          }
+        );
+
+
+        conversationList.appendChild(
+          item
+        );
+
+      }
+    );
+
+  }
+
+  catch (error) {
+
+    console.error(error);
+
+    conversationList.innerHTML = `
+      <div class="empty-history">
+        Unable to load history.
+      </div>
+    `;
+
+  }
+
+}
+
+
+/* =====================================================
+   LOAD ONE CONVERSATION
+   ===================================================== */
+
+async function loadConversation(
+  conversationId,
+  conversationPersona
+) {
+
+  try {
+
+    status.textContent =
+      "Loading conversation...";
+
+
+    const response =
+      await fetch(
+        `${API_URL}/history/${encodeURIComponent(
+          conversationId
+        )}`
+      );
+
+
+    if (!response.ok) {
+      throw new Error(
+        "Failed to load conversation"
+      );
+    }
+
+
+    const history =
+      await response.json();
+
+
+    cid =
+      conversationId;
+
+
+    if (
+      conversationPersona &&
+      (
+        conversationPersona ===
+          "voiceng" ||
+        conversationPersona ===
+          "fia"
+      )
+    ) {
+
+      persona.value =
+        conversationPersona;
+
+    }
+
+
+    clearMessages();
+
+
+    if (!history.length) {
+
+      showWelcome();
+
+    }
+
+    else {
+
+      history.forEach(
+        item => {
+
+          addMessage(
+            item.role,
+            item.content
+          );
+
+        }
+      );
+
+    }
+
+
+    await loadConversations();
+
+
+    status.textContent =
+      "";
+
+
+    /*
+     * Close mobile sidebar.
+     */
+
+    sidebar.classList.remove(
+      "open"
+    );
+
+  }
+
+  catch (error) {
+
+    console.error(error);
+
+    status.textContent =
+      "Unable to load conversation.";
+
+  }
+
+}
+
+
+/* =====================================================
+   NEW CHAT
+   ===================================================== */
+
+function newChat() {
+
+  cid = null;
+
+  clearMessages();
+
+  showWelcome();
+
+  input.value = "";
+
+  status.textContent = "";
+
+  loadConversations();
+
+  input.focus();
+
+  sidebar.classList.remove(
+    "open"
+  );
+
+}
+
+
+/* =====================================================
+   DELETE CONVERSATION
+   ===================================================== */
+
+async function deleteConversation(
+  conversationId
+) {
+
+  const confirmed =
+    window.confirm(
+      "Delete this conversation?"
+    );
+
+
+  if (!confirmed) {
+    return;
+  }
+
+
+  try {
+
+    const response =
+      await fetch(
+        `${API_URL}/conversations/${encodeURIComponent(
+          conversationId
+        )}`,
+        {
+          method: "DELETE"
+        }
+      );
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        "Delete failed"
+      );
+
+    }
+
+
+    /*
+     * If we deleted the currently
+     * open conversation, start fresh.
+     */
+
+    if (
+      cid === conversationId
+    ) {
+
+      cid = null;
+
+      clearMessages();
+
+      showWelcome();
+
+    }
+
+
+    await loadConversations();
+
+  }
+
+  catch (error) {
+
+    console.error(error);
+
+    status.textContent =
+      "Unable to delete conversation.";
+
+  }
+
+}
+
+
+/* =====================================================
+   SEND MESSAGE
+   ===================================================== */
+
+async function sendMessage(
+  text
+) {
+
+  text =
+    text.trim();
+
 
   if (!text) {
     return;
   }
+
 
   addMessage(
     "user",
     text
   );
 
-  input.value = "";
+
+  input.value =
+    "";
+
 
   status.textContent =
     "Thinking...";
 
-  sendButton.disabled = true;
+
+  sendButton.disabled =
+    true;
 
 
   try {
@@ -342,12 +1459,15 @@ async function sendMessage(text) {
               "application/json"
           },
 
-          body: JSON.stringify({
-            cid: cid,
-            persona:
-              persona.value,
-            message: text
-          })
+          body:
+            JSON.stringify({
+              cid: cid,
+
+              persona:
+                persona.value,
+
+              message: text
+            })
         }
       );
 
@@ -357,6 +1477,7 @@ async function sendMessage(text) {
       throw new Error(
         await response.text()
       );
+
     }
 
 
@@ -364,7 +1485,8 @@ async function sendMessage(text) {
       await response.json();
 
 
-    cid = data.cid;
+    cid =
+      data.cid;
 
 
     addMessage(
@@ -374,7 +1496,18 @@ async function sendMessage(text) {
     );
 
 
-    speak(data.answer);
+    speak(
+      data.answer
+    );
+
+
+    /*
+     * Refresh sidebar so
+     * the current conversation
+     * appears immediately.
+     */
+
+    await loadConversations();
 
   }
 
@@ -398,77 +1531,164 @@ async function sendMessage(text) {
       "";
 
   }
+
 }
 
+
+/* =====================================================
+   SEND BUTTON
+   ===================================================== */
 
 sendButton.addEventListener(
   "click",
   () => {
+
     sendMessage(
       input.value
     );
+
   }
 );
 
+
+/* =====================================================
+   ENTER KEY
+   ===================================================== */
 
 input.addEventListener(
   "keydown",
   event => {
 
     if (
-      event.key === "Enter"
+      event.key === "Enter" &&
+      !event.shiftKey
     ) {
+
+      event.preventDefault();
 
       sendMessage(
         input.value
       );
+
     }
 
   }
 );
 
 
+/* =====================================================
+   NEW CHAT BUTTON
+   ===================================================== */
+
+newChatButton.addEventListener(
+  "click",
+  newChat
+);
+
+
+/* =====================================================
+   MOBILE SIDEBAR
+   ===================================================== */
+
+mobileHistoryButton.addEventListener(
+  "click",
+  () => {
+
+    sidebar.classList.toggle(
+      "open"
+    );
+
+  }
+);
+
+
+/* =====================================================
+   PERSONA CHANGE
+   ===================================================== */
+
+persona.addEventListener(
+  "change",
+  () => {
+
+    /*
+     * A different persona starts
+     * a separate conversation.
+     */
+
+    newChat();
+
+  }
+);
+
+
+/* =====================================================
+   TEXT TO SPEECH
+   ===================================================== */
+
 function speak(text) {
 
   if (
-    !("speechSynthesis" in window)
+    !(
+      "speechSynthesis"
+      in window
+    )
   ) {
+
     return;
+
   }
 
+
   window.speechSynthesis.cancel();
+
 
   const utterance =
     new SpeechSynthesisUtterance(
       text
     );
 
-  utterance.rate = 1;
 
-  utterance.pitch = 1;
+  utterance.rate =
+    1;
+
+
+  utterance.pitch =
+    1;
+
 
   window.speechSynthesis.speak(
     utterance
   );
+
 }
 
+
+/* =====================================================
+   VOICE RECORDING
+   ===================================================== */
 
 recordButton.addEventListener(
   "click",
   async () => {
+
+    /*
+     * Stop recording.
+     */
 
     if (mediaRecorder) {
 
       mediaRecorder.stop();
 
       return;
+
     }
 
 
     try {
 
       const stream =
-        await navigator.mediaDevices
+        await navigator
+          .mediaDevices
           .getUserMedia({
             audio: true
           });
@@ -477,13 +1697,29 @@ recordButton.addEventListener(
       audioChunks = [];
 
 
+      /*
+       * Some browsers may not
+       * support audio/webm.
+       */
+
+      let options = {};
+
+      if (
+        MediaRecorder.isTypeSupported(
+          "audio/webm"
+        )
+      ) {
+
+        options.mimeType =
+          "audio/webm";
+
+      }
+
+
       mediaRecorder =
         new MediaRecorder(
           stream,
-          {
-            mimeType:
-              "audio/webm"
-          }
+          options
         );
 
 
@@ -497,6 +1733,7 @@ recordButton.addEventListener(
             audioChunks.push(
               event.data
             );
+
           }
 
         };
@@ -524,6 +1761,10 @@ recordButton.addEventListener(
             "🎙";
 
 
+          const recorder =
+            mediaRecorder;
+
+
           mediaRecorder =
             null;
 
@@ -533,6 +1774,7 @@ recordButton.addEventListener(
               audioChunks,
               {
                 type:
+                  recorder.mimeType ||
                   "audio/webm"
               }
             );
@@ -553,6 +1795,10 @@ recordButton.addEventListener(
             "Transcribing...";
 
 
+          recordButton.disabled =
+            true;
+
+
           try {
 
             const response =
@@ -566,9 +1812,11 @@ recordButton.addEventListener(
 
 
             if (!response.ok) {
+
               throw new Error(
                 await response.text()
               );
+
             }
 
 
@@ -576,7 +1824,10 @@ recordButton.addEventListener(
               await response.json();
 
 
-            if (data.text) {
+            if (
+              data.text &&
+              data.text.trim()
+            ) {
 
               await sendMessage(
                 data.text
@@ -584,14 +1835,31 @@ recordButton.addEventListener(
 
             }
 
+            else {
+
+              status.textContent =
+                "No speech detected.";
+
+            }
+
           }
 
           catch (error) {
 
-            console.error(error);
+            console.error(
+              error
+            );
+
 
             status.textContent =
               "Transcription failed.";
+
+          }
+
+          finally {
+
+            recordButton.disabled =
+              false;
 
           }
 
@@ -619,7 +1887,10 @@ recordButton.addEventListener(
 
     catch (error) {
 
-      console.error(error);
+      console.error(
+        error
+      );
+
 
       status.textContent =
         "Microphone permission failed.";
@@ -628,6 +1899,13 @@ recordButton.addEventListener(
 
   }
 );
+
+
+/* =====================================================
+   INITIAL LOAD
+   ===================================================== */
+
+loadConversations();
 
 </script>
 
