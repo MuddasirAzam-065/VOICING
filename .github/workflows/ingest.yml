@@ -23,10 +23,10 @@ jobs:
       - name: Locate backend folder
         id: find
         run: |
-          find . -not -path './.git/*' -type f | head -60
           FILE=$(find . -name ingest.py -not -path './.git/*' | head -1)
+          echo "Found: $FILE"
           if [ -z "$FILE" ]; then
-            echo "ingest.py is not in this branch. Commit and push it first."
+            echo "ingest.py not found in this branch"
             exit 1
           fi
           echo "dir=$(dirname "$FILE")" >> "$GITHUB_OUTPUT"
@@ -35,13 +35,26 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install -r requirements.txt
+      - name: Install dependencies
         working-directory: ${{ steps.find.outputs.dir }}
+        run: pip install -r requirements.txt
 
-      - run: python ingest.py --persona "${{ inputs.persona || 'both' }}"
+      - name: Check secrets are present
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          for v in MONGO_URI GEMINI_API_KEY SITE_URL; do
+            if [ -z "${!v}" ]; then echo "MISSING SECRET: $v"; exit 1; fi
+          done
+          echo "All secrets present"
+
+      - name: Run ingestion
         working-directory: ${{ steps.find.outputs.dir }}
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SITE_URL: ${{ secrets.SITE_URL }}
           FIA_URL: ${{ secrets.FIA_URL }}
+        run: python -u ingest.py --persona "${{ inputs.persona || 'both' }}"
