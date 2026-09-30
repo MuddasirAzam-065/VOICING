@@ -1,11 +1,17 @@
 name: Ingest knowledge base
 
 on:
-  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 0"        # every Sunday at 03:00 UTC
+  workflow_dispatch:            # adds a manual "Run workflow" button
     inputs:
       persona:
         description: "voiceng, fia or both"
         default: "both"
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false     # never run two ingests at once
 
 jobs:
   ingest:
