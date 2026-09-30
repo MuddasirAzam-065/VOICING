@@ -17,6 +17,9 @@ from fastapi.responses import JSONResponse
 from langfuse import observe, propagate_attributes
 from pydantic import BaseModel
 from google import genai
+from google.genai import types
+
+gemini_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
 from .graph import graph
 from .kb import db
@@ -106,71 +109,40 @@ def health():
 # --------------------------------------------------
 
 @app.post("/stt")
-def speech_to_text(
-    audio: UploadFile = File(...)
-):
-
-    suffix = ".webm"
-
-    if audio.filename:
-        original = audio.filename.lower()
-
-        if "." in original:
-            suffix = (
-                "."
-                + original.rsplit(".", 1)[1]
-            )
+def speech_to_text(audio: UploadFile = File(...)):
 
     audio_bytes = audio.file.read()
 
     if not audio_bytes:
-        raise HTTPException(
-            status_code=400,
-            detail="Empty audio file.",
-        )
+        raise HTTPException(status_code=400, detail="Empty audio file.")
 
-    temp_path = None
+    suffix = ".webm"
+    if audio.filename and "." in audio.filename:
+        suffix = "." + audio.filename.lower().rsplit(".", 1)[1]
+
+    mime_types = {
+        ".webm": "audio/webm",
+        ".ogg": "audio/ogg",
+        ".wav": "audio/wav",
+        ".mp3": "audio/mp3",
+        ".m4a": "audio/aac",
+    }
+    mime = mime_types.get(suffix, "audio/webm")
 
     try:
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                "Transcribe this audio exactly. Return only the transcript "
+                "and nothing else. If there is no speech, return an empty string.",
+                types.Part.from_bytes(data=audio_bytes, mime_type=mime),
+            ],
+        )
+    except Exception as exc:
+        print("STT ERROR:", repr(exc))
+        raise HTTPException(status_code=502, detail="Transcription failed.")
 
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=suffix,
-        ) as tmp:
-
-            tmp.write(audio_bytes)
-
-            temp_path = tmp.name
-
-        with open(
-            temp_path,
-            "rb",
-        ) as file:
-
-            result = (
-                groq_client.audio.transcriptions.create(
-                    file=file,
-                    model="whisper-large-v3-turbo",
-                    response_format="json",
-                    language="en",
-                    temperature=0.0,
-                )
-            )
-
-        return {
-            "text": result.text
-        }
-
-    finally:
-
-        if temp_path:
-
-            try:
-                os.unlink(temp_path)
-
-            except OSError:
-                pass
-
+    return {"text": (response.text or "").strip()}
 
 # --------------------------------------------------
 # Chat
