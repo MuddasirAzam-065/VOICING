@@ -1,40 +1,44 @@
 import os
 
+import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+from huggingface_hub import InferenceClient
 from pymongo import MongoClient
 
 from personas import PERSONAS, PROMPT
 
 load_dotenv()
 
-CHAT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-EMBED_MODEL = "gemini-embedding-001"
-EMBED_DIM = 768
+CHAT_MODEL = os.getenv("CHAT_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+STT_MODEL = os.getenv("STT_MODEL", "openai/whisper-large-v3-turbo")
+EMBED_DIM = int(os.getenv("EMBED_DIM", "384"))  # must match EMBED_MODEL
 TOP_K = 6
-MIN_SCORE = 0.70  # Atlas cosine score = (1 + cos) / 2, so 0.70 is about cos 0.40. Tune this.
+MIN_SCORE = 0.60  # Atlas cosine score = (1 + cos) / 2. Tune this.
 
 ERROR_MESSAGE = "Sorry, I'm having trouble answering right now. Please try again."
 
 db = MongoClient(os.environ["MONGO_URI"], serverSelectionTimeoutMS=10000)["voiceng"]
-gemini = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+hf = InferenceClient(api_key=os.environ["HF_TOKEN"])
 
 
-def embed(texts: list[str], task: str) -> list[list[float]]:
-    result = gemini.models.embed_content(
-        model=EMBED_MODEL,
-        contents=texts,
-        config=types.EmbedContentConfig(
-            task_type=task,
-            output_dimensionality=EMBED_DIM,
-        ),
-    )
-    return [e.values for e in result.embeddings]
+def _embed_one(text: str) -> list[float]:
+    vec = np.array(hf.feature_extraction(text, model=EMBED_MODEL), dtype="float32")
+    if vec.ndim > 1:                      # token-level output -> mean pool
+        vec = vec.reshape(-1, vec.shape[-1]).mean(axis=0)
+    vec = vec / (np.linalg.norm(vec) or 1.0)
+    return vec.tolist()
+
+
+def embed(texts: list[str], task: str = "") -> list[list[float]]:
+    # `task` is kept so ingest.py needs no change; MiniLM doesn't use it.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        return list(pool.map(_embed_one, texts))
 
 
 def search(query: str, persona: str) -> list[dict]:
-    vector = embed([query], "RETRIEVAL_QUERY")[0]
+    vector = embed([query], "query")[0]
 
     pipeline = [
         {
@@ -81,29 +85,20 @@ def answer_question(persona: str, question: str, history: list[dict]):
         context=build_context(docs),
     )
 
-    contents = [
-        types.Content(
-            role="model" if m["role"] == "assistant" else "user",
-            parts=[types.Part(text=m["content"])],
-        )
-        for m in history
-    ]
-    contents.append(types.Content(role="user", parts=[types.Part(text=question)]))
+    messages = [{"role": "system", "content": system_prompt}]
+    messages += [{"role": m["role"], "content": m["content"]} for m in history]
+    messages.append({"role": "user", "content": question})
 
     try:
-        response = gemini.models.generate_content(
+        response = hf.chat_completion(
             model=CHAT_MODEL,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.2,
-                max_output_tokens=500,
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
-            ),
+            messages=messages,
+            temperature=0.2,
+            max_tokens=500,
         )
-        answer = (response.text or "").strip() or ERROR_MESSAGE
+        answer = (response.choices[0].message.content or "").strip() or ERROR_MESSAGE
     except Exception as exc:
-        print("GEMINI ERROR:", repr(exc))
+        print("CHAT ERROR:", repr(exc))
         answer = ERROR_MESSAGE
 
     sources = list(dict.fromkeys(d["url"] for d in docs if d.get("url")))
@@ -111,16 +106,5 @@ def answer_question(persona: str, question: str, history: list[dict]):
 
 
 def transcribe(audio_bytes: bytes, mime_type: str) -> str:
-    response = gemini.models.generate_content(
-        model=CHAT_MODEL,
-        contents=[
-            "Transcribe this audio exactly. Return only the transcript, "
-            "or an empty string if there is no speech.",
-            types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
-        ],
-        config=types.GenerateContentConfig(
-            temperature=0.0,
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
-        ),
-    )
-    return (response.text or "").strip()
+    result = hf.automatic_speech_recognition(audio_bytes, model=STT_MODEL)
+    return (result.text or "").strip()
