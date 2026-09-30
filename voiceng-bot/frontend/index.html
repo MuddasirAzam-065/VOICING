@@ -1,1914 +1,530 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VoiceNG Assistant</title>
+<style>
+  * { box-sizing: border-box; }
 
-  <meta charset="UTF-8">
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f4f6f8;
+    color: #17202a;
+    height: 100dvh;
+    overflow: hidden;
+  }
 
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1"
-  >
+  .app { display: flex; height: 100dvh; width: 100%; }
 
-  <title>VoiceNG Assistant</title>
+  /* Sidebar */
+  .sidebar {
+    width: 280px; min-width: 280px;
+    background: #fff;
+    border-right: 1px solid #e4e7ec;
+    display: flex; flex-direction: column;
+  }
+  .sidebar-header { padding: 20px; border-bottom: 1px solid #e4e7ec; }
+  .brand { margin: 0 0 4px; font-size: 21px; font-weight: 700; }
+  .brand-subtitle { margin: 0; color: #667085; font-size: 13px; }
+  .new-chat {
+    width: 100%; margin-top: 16px;
+    background: #0b5fff; color: #fff;
+    padding: 11px 14px; font-weight: 600;
+  }
+  .new-chat:hover { opacity: .92; }
+  .history-title {
+    padding: 16px 20px 8px;
+    font-size: 12px; font-weight: 700; color: #667085;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  #conversationList { flex: 1; overflow-y: auto; padding: 4px 10px 15px; }
+  .conversation {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px; border-radius: 9px; cursor: pointer; margin-bottom: 3px;
+  }
+  .conversation:hover { background: #f2f4f7; }
+  .conversation.active { background: #e8f0ff; }
+  .conversation-content { min-width: 0; flex: 1; }
+  .conversation-message {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 14px; color: #344054;
+  }
+  .conversation-meta { margin-top: 3px; font-size: 11px; color: #98a2b3; }
+  .delete-conversation {
+    flex-shrink: 0; background: transparent; color: #98a2b3;
+    padding: 5px; border-radius: 6px;
+  }
+  .delete-conversation:hover { background: #fee4e2; color: #d92d20; }
+  .empty-history { padding: 20px 10px; color: #98a2b3; text-align: center; font-size: 13px; }
 
-  <style>
+  /* Main */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar {
+    height: 70px; background: #fff; border-bottom: 1px solid #e4e7ec;
+    display: flex; align-items: center; padding: 0 24px; gap: 12px;
+  }
+  .mobile-history-button { display: none; background: #f2f4f7; color: #344054; padding: 9px 12px; }
+  .topbar-title { flex: 1; font-size: 18px; font-weight: 650; }
+  .persona-select {
+    padding: 9px 11px; border: 1px solid #d0d5dd; border-radius: 8px;
+    background: #fff; font: inherit;
+  }
+  .icon-btn { background: #f2f4f7; color: #344054; padding: 9px 12px; }
 
-    * {
-      box-sizing: border-box;
-    }
+  /* Chat */
+  .chat-wrapper {
+    flex: 1; display: flex; flex-direction: column; min-height: 0;
+    width: min(950px, 100%); margin: 0 auto; padding: 20px 24px 18px;
+  }
+  #messages { flex: 1; min-height: 0; overflow-y: auto; padding: 5px 0 15px; }
+  .welcome { height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; color: #667085; }
+  .welcome-inner { max-width: 550px; }
+  .welcome h2 { color: #17202a; margin-bottom: 8px; }
+  .welcome p { margin-top: 0; }
 
-    body {
-      margin: 0;
-      font-family:
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif;
+  .message {
+    margin: 12px 0; padding: 12px 15px; border-radius: 12px;
+    white-space: pre-wrap; line-height: 1.5; max-width: 78%;
+    overflow-wrap: anywhere;
+  }
+  .message.user { background: #e8f0ff; margin-left: auto; }
+  .message.assistant { background: #fff; border: 1px solid #eaecf0; margin-right: auto; }
 
-      background: #f4f6f8;
-      color: #17202a;
-      height: 100vh;
-      overflow: hidden;
-    }
+  .typing span {
+    display: inline-block; width: 7px; height: 7px; margin-right: 4px;
+    background: #98a2b3; border-radius: 50%;
+    animation: blink 1.2s infinite both;
+  }
+  .typing span:nth-child(2) { animation-delay: .2s; }
+  .typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
 
-    /* =========================
-       APP LAYOUT
-       ========================= */
+  .sources { margin-top: 7px; font-size: 12px; max-width: 78%; }
+  .sources-title { font-weight: 600; margin-bottom: 3px; }
+  .sources a { display: block; color: #0b5fff; margin-top: 3px; overflow-wrap: anywhere; }
 
-    .app {
-      display: flex;
-      height: 100vh;
-      width: 100%;
-    }
+  /* Composer */
+  .composer { display: flex; gap: 8px; padding-top: 10px; }
+  #messageInput {
+    flex: 1; min-width: 0; padding: 12px 13px;
+    border: 1px solid #d0d5dd; border-radius: 9px; outline: none; font: inherit;
+  }
+  #messageInput:focus { border-color: #0b5fff; box-shadow: 0 0 0 3px rgba(11,95,255,.1); }
 
+  button { font: inherit; border: 0; border-radius: 9px; padding: 11px 15px; cursor: pointer; }
+  #sendButton { background: #0b5fff; color: #fff; }
+  #recordButton { background: #475467; color: #fff; }
+  #recordButton.recording { background: #d92d20; }
+  button:disabled { opacity: .6; cursor: not-allowed; }
 
-    /* =========================
-       SIDEBAR
-       ========================= */
+  #status { min-height: 20px; margin-top: 7px; color: #667085; font-size: 13px; }
 
+  .backdrop { display: none; }
+
+  /* Mobile */
+  @media (max-width: 760px) {
     .sidebar {
-      width: 280px;
-      min-width: 280px;
-
-      background: #ffffff;
-
-      border-right:
-        1px solid #e4e7ec;
-
-      display: flex;
-      flex-direction: column;
+      position: fixed; left: 0; top: 0; bottom: 0; z-index: 100;
+      transform: translateX(-100%); transition: transform .2s ease;
+      box-shadow: 5px 0 20px rgba(0,0,0,.12);
     }
-
-
-    .sidebar-header {
-      padding: 20px;
-      border-bottom:
-        1px solid #e4e7ec;
-    }
-
-
-    .brand {
-      margin: 0 0 4px 0;
-      font-size: 21px;
-      font-weight: 700;
-    }
-
-
-    .brand-subtitle {
-      margin: 0;
-      color: #667085;
-      font-size: 13px;
-    }
-
-
-    .new-chat {
-      width: 100%;
-      margin-top: 16px;
-
-      background: #0b5fff;
-      color: white;
-
-      border: 0;
-      border-radius: 9px;
-
-      padding: 11px 14px;
-
-      cursor: pointer;
-      font-weight: 600;
-    }
-
-
-    .new-chat:hover {
-      opacity: 0.92;
-    }
-
-
-    .history-title {
-      padding:
-        16px 20px 8px;
-
-      font-size: 12px;
-      font-weight: 700;
-
-      color: #667085;
-
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-
-
-    #conversationList {
-      flex: 1;
-      overflow-y: auto;
-      padding: 4px 10px 15px;
-    }
-
-
-    .conversation {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-
-      padding: 10px;
-
-      border-radius: 9px;
-
-      cursor: pointer;
-
-      margin-bottom: 3px;
-    }
-
-
-    .conversation:hover {
-      background: #f2f4f7;
-    }
-
-
-    .conversation.active {
-      background: #e8f0ff;
-    }
-
-
-    .conversation-content {
-      min-width: 0;
-      flex: 1;
-    }
-
-
-    .conversation-message {
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-
-      font-size: 14px;
-      color: #344054;
-    }
-
-
-    .conversation-meta {
-      margin-top: 3px;
-
-      font-size: 11px;
-      color: #98a2b3;
-    }
-
-
-    .delete-conversation {
-      flex-shrink: 0;
-
-      border: 0;
-      background: transparent;
-
-      color: #98a2b3;
-
-      padding: 5px;
-      border-radius: 6px;
-
-      cursor: pointer;
-    }
-
-
-    .delete-conversation:hover {
-      background: #fee4e2;
-      color: #d92d20;
-    }
-
-
-    .empty-history {
-      padding: 20px 10px;
-
-      color: #98a2b3;
-
-      text-align: center;
-
-      font-size: 13px;
-    }
-
-
-    /* =========================
-       MAIN
-       ========================= */
-
-    .main {
-      flex: 1;
-      min-width: 0;
-
-      display: flex;
-      flex-direction: column;
-    }
-
-
-    .topbar {
-      height: 70px;
-
-      background: white;
-
-      border-bottom:
-        1px solid #e4e7ec;
-
-      display: flex;
-      align-items: center;
-
-      padding:
-        0 24px;
-
-      gap: 12px;
-    }
-
-
-    .mobile-history-button {
-      display: none;
-
-      border: 0;
-      background: #f2f4f7;
-
-      color: #344054;
-
-      border-radius: 8px;
-
-      padding: 9px 12px;
-
-      cursor: pointer;
-    }
-
-
-    .topbar-title {
-      flex: 1;
-
-      font-size: 18px;
-      font-weight: 650;
-    }
-
-
-    .persona-select {
-      padding: 9px 11px;
-
-      border:
-        1px solid #d0d5dd;
-
-      border-radius: 8px;
-
-      background: white;
-
-      font: inherit;
-    }
-
-
-    /* =========================
-       CHAT AREA
-       ========================= */
-
-    .chat-wrapper {
-      flex: 1;
-
-      display: flex;
-      flex-direction: column;
-
-      min-height: 0;
-
-      width: min(
-        950px,
-        100%
-      );
-
-      margin: 0 auto;
-
-      padding:
-        20px 24px 18px;
-    }
-
-
-    #messages {
-      flex: 1;
-
-      min-height: 0;
-
-      overflow-y: auto;
-
-      padding:
-        5px 0 15px;
-    }
-
-
-    .welcome {
-      height: 100%;
-
-      display: flex;
-      align-items: center;
-      justify-content: center;
-
-      text-align: center;
-
-      color: #667085;
-    }
-
-
-    .welcome-inner {
-      max-width: 550px;
-    }
-
-
-    .welcome h2 {
-      color: #17202a;
-      margin-bottom: 8px;
-    }
-
-
-    .welcome p {
-      margin-top: 0;
-    }
-
-
-    .message {
-      margin: 12px 0;
-
-      padding:
-        12px 15px;
-
-      border-radius: 12px;
-
-      white-space: pre-wrap;
-
-      line-height: 1.5;
-
-      max-width: 78%;
-    }
-
-
-    .user {
-      background: #e8f0ff;
-      margin-left: auto;
-    }
-
-
-    .assistant {
-      background: white;
-
-      border:
-        1px solid #eaecf0;
-
-      margin-right: auto;
-    }
-
-
-    .sources {
-      margin-top: 7px;
-
-      font-size: 12px;
-
-      max-width: 78%;
-    }
-
-
-    .sources-title {
-      font-weight: 600;
-      margin-bottom: 3px;
-    }
-
-
-    .sources a {
-      display: block;
-
-      color: #0b5fff;
-
-      margin-top: 3px;
-
-      overflow-wrap: anywhere;
-    }
-
-
-    /* =========================
-       COMPOSER
-       ========================= */
-
-    .composer {
-      display: flex;
-
-      gap: 8px;
-
-      padding-top: 10px;
-    }
-
-
-    #messageInput {
-      flex: 1;
-
-      min-width: 0;
-
-      padding:
-        12px 13px;
-
-      border:
-        1px solid #d0d5dd;
-
-      border-radius: 9px;
-
-      outline: none;
-
-      font: inherit;
-    }
-
-
-    #messageInput:focus {
-      border-color: #0b5fff;
-
-      box-shadow:
-        0 0 0 3px
-        rgba(11, 95, 255, 0.1);
-    }
-
-
-    button {
-      font: inherit;
-
-      border: 0;
-
-      border-radius: 9px;
-
-      padding:
-        11px 15px;
-
-      cursor: pointer;
-    }
-
-
-    #sendButton {
-      background: #0b5fff;
-      color: white;
-    }
-
-
-    button.secondary {
-      background: #475467;
-      color: white;
-    }
-
-
-    button.recording {
-      background: #d92d20;
-    }
-
-
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-
-    #status {
-      min-height: 20px;
-
-      margin-top: 7px;
-
-      color: #667085;
-
-      font-size: 13px;
-    }
-
-
-    /* =========================
-       MOBILE
-       ========================= */
-
-    @media (max-width: 760px) {
-
-      body {
-        overflow: hidden;
-      }
-
-
-      .sidebar {
-        position: fixed;
-
-        left: 0;
-        top: 0;
-        bottom: 0;
-
-        z-index: 100;
-
-        transform:
-          translateX(-100%);
-
-        transition:
-          transform 0.2s ease;
-
-        box-shadow:
-          5px 0 20px
-          rgba(0, 0, 0, 0.12);
-      }
-
-
-      .sidebar.open {
-        transform:
-          translateX(0);
-      }
-
-
-      .mobile-history-button {
-        display: block;
-      }
-
-
-      .topbar {
-        padding:
-          0 12px;
-      }
-
-
-      .topbar-title {
-        font-size: 16px;
-      }
-
-
-      .persona-select {
-        max-width: 145px;
-      }
-
-
-      .chat-wrapper {
-        padding:
-          12px 12px 10px;
-      }
-
-
-      .message {
-        max-width: 90%;
-      }
-
-
-      .sources {
-        max-width: 90%;
-      }
-
-
-      #sendButton {
-        padding:
-          11px 13px;
-      }
-
-    }
-
-  </style>
-
+    .sidebar.open { transform: translateX(0); }
+    .backdrop.show { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.3); z-index: 90; }
+    .mobile-history-button { display: block; }
+    .topbar { padding: 0 12px; }
+    .topbar-title { font-size: 16px; }
+    .persona-select { max-width: 130px; }
+    .chat-wrapper { padding: 12px 12px 10px; }
+    .message, .sources { max-width: 90%; }
+  }
+</style>
 </head>
 
-
 <body>
-
 <div class="app">
 
-
-  <!-- =========================
-       SIDEBAR
-       ========================= -->
-
-  <aside
-    id="sidebar"
-    class="sidebar"
-  >
-
+  <aside id="sidebar" class="sidebar">
     <div class="sidebar-header">
-
-      <h1 class="brand">
-        VoiceNG
-      </h1>
-
-      <p class="brand-subtitle">
-        AI Assistant
-      </p>
-
-
-      <button
-        id="newChatButton"
-        class="new-chat"
-      >
-        + New Chat
-      </button>
-
+      <h1 class="brand">VoiceNG</h1>
+      <p class="brand-subtitle">AI Assistant</p>
+      <button id="newChatButton" class="new-chat">+ New Chat</button>
     </div>
-
-
-    <div class="history-title">
-      Conversation History
-    </div>
-
-
+    <div class="history-title">Conversation History</div>
     <div id="conversationList">
-
-      <div class="empty-history">
-        Loading history...
-      </div>
-
+      <div class="empty-history">Loading history...</div>
     </div>
-
   </aside>
 
-
-  <!-- =========================
-       MAIN
-       ========================= -->
+  <div id="backdrop" class="backdrop"></div>
 
   <main class="main">
-
-
     <header class="topbar">
-
-      <button
-        id="mobileHistoryButton"
-        class="mobile-history-button"
-      >
-        ☰
-      </button>
-
-
-      <div class="topbar-title">
-        VoiceNG Assistant
-      </div>
-
-
-      <select
-        id="persona"
-        class="persona-select"
-      >
-
-        <option value="voiceng">
-          VoiceNG AI Assistant
-        </option>
-
-        <option value="fia">
-          FIA FAQ
-        </option>
-
+      <button id="mobileHistoryButton" class="mobile-history-button" aria-label="Open history">☰</button>
+      <div class="topbar-title">VoiceNG Assistant</div>
+      <button id="muteButton" class="icon-btn" title="Toggle spoken answers">🔊</button>
+      <select id="persona" class="persona-select">
+        <option value="voiceng">VoiceNG AI Assistant</option>
+        <option value="fia">FIA FAQ</option>
       </select>
-
     </header>
 
-
     <div class="chat-wrapper">
-
-
-      <div id="messages">
-
-        <div class="welcome">
-
-          <div class="welcome-inner">
-
-            <h2>
-              How can I help you?
-            </h2>
-
-            <p>
-              Ask a question using text
-              or your microphone.
-            </p>
-
-          </div>
-
-        </div>
-
-      </div>
-
+      <div id="messages"></div>
 
       <div class="composer">
-
-        <input
-          id="messageInput"
-          placeholder="Ask something..."
-          autocomplete="off"
-        >
-
-
-        <button
-          id="sendButton"
-        >
-          Send
-        </button>
-
-
-        <button
-          id="recordButton"
-          class="secondary"
-          title="Record voice"
-        >
-          🎙
-        </button>
-
+        <input id="messageInput" placeholder="Ask something..." autocomplete="off">
+        <button id="sendButton">Send</button>
+        <button id="recordButton" title="Record voice">🎙</button>
       </div>
-
-
       <div id="status"></div>
-
     </div>
-
   </main>
-
 </div>
 
-
 <script>
+/* ---------- Configuration ---------- */
+// Put your deployed backend URL here (no trailing slash)
+const API_URL = "https://YOUR-BACKEND.vercel.app";
 
-/* =====================================================
-   CONFIGURATION
-   ===================================================== */
-
-/*
- * Change this after your Render backend is deployed.
- *
- * Example:
- *
- * const API_URL =
- *   "https://voiceng-api.onrender.com";
- */
-
-const API_URL =
-  "https://YOUR-BACKEND.onrender.com";
-
-
-/* =====================================================
-   STATE
-   ===================================================== */
+/* ---------- State ---------- */
+// Anonymous per-browser ID, so each visitor only sees their own chats
+let uid = null;
+try { uid = localStorage.getItem("uid"); } catch {}
+if (!uid) {
+  uid = crypto.randomUUID();
+  try { localStorage.setItem("uid", uid); } catch {}
+}
 
 let cid = null;
-
+let busy = false;
 let mediaRecorder = null;
-
 let audioChunks = [];
+let muted = false;
+try { muted = localStorage.getItem("muted") === "1"; } catch {}
 
+/* ---------- DOM ---------- */
+const $ = id => document.getElementById(id);
+const messagesEl = $("messages");
+const inputEl = $("messageInput");
+const sendButton = $("sendButton");
+const recordButton = $("recordButton");
+const muteButton = $("muteButton");
+const statusEl = $("status");
+const personaEl = $("persona");
+const listEl = $("conversationList");
+const sidebar = $("sidebar");
+const backdrop = $("backdrop");
 
-/* =====================================================
-   DOM
-   ===================================================== */
-
-const messages =
-  document.getElementById(
-    "messages"
-  );
-
-
-const input =
-  document.getElementById(
-    "messageInput"
-  );
-
-
-const sendButton =
-  document.getElementById(
-    "sendButton"
-  );
-
-
-const recordButton =
-  document.getElementById(
-    "recordButton"
-  );
-
-
-const status =
-  document.getElementById(
-    "status"
-  );
-
-
-const persona =
-  document.getElementById(
-    "persona"
-  );
-
-
-const conversationList =
-  document.getElementById(
-    "conversationList"
-  );
-
-
-const newChatButton =
-  document.getElementById(
-    "newChatButton"
-  );
-
-
-const sidebar =
-  document.getElementById(
-    "sidebar"
-  );
-
-
-const mobileHistoryButton =
-  document.getElementById(
-    "mobileHistoryButton"
-  );
-
-
-/* =====================================================
-   HELPERS
-   ===================================================== */
-
-function escapeDate(value) {
-
-  if (!value) {
-    return "";
-  }
-
-  try {
-
-    return new Date(value)
-      .toLocaleString();
-
-  }
-
-  catch {
-
-    return "";
-
-  }
-
+/* ---------- Helpers ---------- */
+function formatDate(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  return isNaN(d) ? "" : d.toLocaleString([], { dateStyle: "short", timeStyle: "short" });
 }
-
-
-function clearMessages() {
-
-  messages.innerHTML = "";
-
-}
-
 
 function showWelcome() {
-
-  messages.innerHTML = `
-    <div class="welcome">
-      <div class="welcome-inner">
-        <h2>How can I help you?</h2>
-        <p>
-          Ask a question using text
-          or your microphone.
-        </p>
-      </div>
-    </div>
-  `;
-
+  messagesEl.innerHTML = `
+    <div class="welcome"><div class="welcome-inner">
+      <h2>How can I help you?</h2>
+      <p>Ask a question using text or your microphone.</p>
+    </div></div>`;
 }
 
-
-/* =====================================================
-   DISPLAY MESSAGE
-   ===================================================== */
-
-function addMessage(
-  role,
-  text,
-  sources = []
-) {
-
-  /*
-   * Remove welcome screen
-   * when the first message arrives.
-   */
-
-  const welcome =
-    messages.querySelector(
-      ".welcome"
-    );
-
-  if (welcome) {
-    welcome.remove();
-  }
-
-
-  const div =
-    document.createElement(
-      "div"
-    );
-
-
-  div.className =
-    `message ${role}`;
-
-
-  div.textContent =
-    text;
-
-
-  messages.appendChild(
-    div
-  );
-
-
-  if (
-    role === "assistant" &&
-    sources.length
-  ) {
-
-    const sourceDiv =
-      document.createElement(
-        "div"
-      );
-
-
-    sourceDiv.className =
-      "sources";
-
-
-    const title =
-      document.createElement(
-        "div"
-      );
-
-
-    title.className =
-      "sources-title";
-
-
-    title.textContent =
-      "Sources:";
-
-
-    sourceDiv.appendChild(
-      title
-    );
-
-
-    sources.forEach(
-      url => {
-
-        const link =
-          document.createElement(
-            "a"
-          );
-
-
-        link.href =
-          url;
-
-
-        link.target =
-          "_blank";
-
-
-        link.rel =
-          "noopener noreferrer";
-
-
-        link.textContent =
-          url;
-
-
-        sourceDiv.appendChild(
-          link
-        );
-
-      }
-    );
-
-
-    messages.appendChild(
-      sourceDiv
-    );
-
-  }
-
-
-  messages.scrollTop =
-    messages.scrollHeight;
-
+function removeWelcome() {
+  const w = messagesEl.querySelector(".welcome");
+  if (w) w.remove();
 }
 
+function scrollDown() { messagesEl.scrollTop = messagesEl.scrollHeight; }
 
-/* =====================================================
-   LOAD CONVERSATION HISTORY
-   ===================================================== */
+function openSidebar(open) {
+  sidebar.classList.toggle("open", open);
+  backdrop.classList.toggle("show", open);
+}
 
+function setBusy(value) {
+  busy = value;
+  sendButton.disabled = value;
+  inputEl.disabled = value;
+  if (!value) inputEl.focus();
+}
+
+async function api(path, options) {
+  const res = await fetch(`${API_URL}${path}`, options);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/* ---------- Messages ---------- */
+function addMessage(role, text, sources = []) {
+  removeWelcome();
+
+  const div = document.createElement("div");
+  div.className = `message ${role}`;
+  div.textContent = text;
+  messagesEl.appendChild(div);
+
+  if (role === "assistant" && sources.length) {
+    const box = document.createElement("div");
+    box.className = "sources";
+
+    const title = document.createElement("div");
+    title.className = "sources-title";
+    title.textContent = "Sources:";
+    box.appendChild(title);
+
+    sources.forEach(url => {
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = url;
+      box.appendChild(a);
+    });
+    messagesEl.appendChild(box);
+  }
+  scrollDown();
+}
+
+function addTyping() {
+  removeWelcome();
+  const div = document.createElement("div");
+  div.className = "message assistant typing";
+  div.innerHTML = "<span></span><span></span><span></span>";
+  messagesEl.appendChild(div);
+  scrollDown();
+  return div;
+}
+
+/* ---------- Conversations ---------- */
 async function loadConversations() {
-
   try {
+    const conversations = await api(`/conversations?user_id=${encodeURIComponent(uid)}`);
+    listEl.innerHTML = "";
 
-    const response =
-      await fetch(
-        `${API_URL}/conversations`
-      );
-
-
-    if (!response.ok) {
-      throw new Error(
-        "Failed to load conversations"
-      );
-    }
-
-
-    const conversations =
-      await response.json();
-
-
-    conversationList.innerHTML =
-      "";
-
-
-    if (
-      !conversations.length
-    ) {
-
-      conversationList.innerHTML = `
-        <div class="empty-history">
-          No conversations yet.
-        </div>
-      `;
-
+    if (!conversations.length) {
+      listEl.innerHTML = '<div class="empty-history">No conversations yet.</div>';
       return;
-
     }
 
+    conversations.forEach(c => {
+      const item = document.createElement("div");
+      item.className = "conversation" + (c.cid === cid ? " active" : "");
 
-    conversations.forEach(
-      conversation => {
+      const content = document.createElement("div");
+      content.className = "conversation-content";
 
-        const item =
-          document.createElement(
-            "div"
-          );
+      const msg = document.createElement("div");
+      msg.className = "conversation-message";
+      msg.textContent = c.last_message || "New conversation";
 
+      const meta = document.createElement("div");
+      meta.className = "conversation-meta";
+      meta.textContent = `${c.persona || ""} • ${formatDate(c.created_at)}`;
 
-        item.className =
-          "conversation";
+      content.append(msg, meta);
 
+      const del = document.createElement("button");
+      del.className = "delete-conversation";
+      del.textContent = "🗑";
+      del.title = "Delete conversation";
+      del.addEventListener("click", e => {
+        e.stopPropagation();
+        deleteConversation(c.cid);
+      });
 
-        if (
-          conversation.cid === cid
-        ) {
-
-          item.classList.add(
-            "active"
-          );
-
-        }
-
-
-        /* Conversation text */
-
-        const content =
-          document.createElement(
-            "div"
-          );
-
-
-        content.className =
-          "conversation-content";
-
-
-        const message =
-          document.createElement(
-            "div"
-          );
-
-
-        message.className =
-          "conversation-message";
-
-
-        message.textContent =
-          conversation.last_message ||
-          "New conversation";
-
-
-        const meta =
-          document.createElement(
-            "div"
-          );
-
-
-        meta.className =
-          "conversation-meta";
-
-
-        meta.textContent =
-          `${conversation.persona || ""} • ${
-            escapeDate(
-              conversation.created_at
-            )
-          }`;
-
-
-        content.appendChild(
-          message
-        );
-
-
-        content.appendChild(
-          meta
-        );
-
-
-        /* Delete button */
-
-        const deleteButton =
-          document.createElement(
-            "button"
-          );
-
-
-        deleteButton.className =
-          "delete-conversation";
-
-
-        deleteButton.textContent =
-          "🗑";
-
-
-        deleteButton.title =
-          "Delete conversation";
-
-
-        deleteButton.addEventListener(
-          "click",
-          event => {
-
-            event.stopPropagation();
-
-            deleteConversation(
-              conversation.cid
-            );
-
-          }
-        );
-
-
-        item.appendChild(
-          content
-        );
-
-
-        item.appendChild(
-          deleteButton
-        );
-
-
-        /* Open conversation */
-
-        item.addEventListener(
-          "click",
-          () => {
-
-            loadConversation(
-              conversation.cid,
-              conversation.persona
-            );
-
-          }
-        );
-
-
-        conversationList.appendChild(
-          item
-        );
-
-      }
-    );
-
+      item.append(content, del);
+      item.addEventListener("click", () => openConversation(c.cid, c.persona));
+      listEl.appendChild(item);
+    });
+  } catch (err) {
+    console.error(err);
+    listEl.innerHTML = '<div class="empty-history">Unable to load history.</div>';
   }
-
-  catch (error) {
-
-    console.error(error);
-
-    conversationList.innerHTML = `
-      <div class="empty-history">
-        Unable to load history.
-      </div>
-    `;
-
-  }
-
 }
 
-
-/* =====================================================
-   LOAD ONE CONVERSATION
-   ===================================================== */
-
-async function loadConversation(
-  conversationId,
-  conversationPersona
-) {
-
+async function openConversation(id, conversationPersona) {
   try {
+    statusEl.textContent = "Loading conversation...";
+    const history = await api(`/history/${encodeURIComponent(id)}?user_id=${encodeURIComponent(uid)}`);
 
-    status.textContent =
-      "Loading conversation...";
-
-
-    const response =
-      await fetch(
-        `${API_URL}/history/${encodeURIComponent(
-          conversationId
-        )}`
-      );
-
-
-    if (!response.ok) {
-      throw new Error(
-        "Failed to load conversation"
-      );
+    cid = id;
+    if (conversationPersona === "voiceng" || conversationPersona === "fia") {
+      personaEl.value = conversationPersona;
     }
 
+    messagesEl.innerHTML = "";
+    if (!history.length) showWelcome();
+    else history.forEach(item => addMessage(item.role, item.content));
 
-    const history =
-      await response.json();
-
-
-    cid =
-      conversationId;
-
-
-    if (
-      conversationPersona &&
-      (
-        conversationPersona ===
-          "voiceng" ||
-        conversationPersona ===
-          "fia"
-      )
-    ) {
-
-      persona.value =
-        conversationPersona;
-
-    }
-
-
-    clearMessages();
-
-
-    if (!history.length) {
-
-      showWelcome();
-
-    }
-
-    else {
-
-      history.forEach(
-        item => {
-
-          addMessage(
-            item.role,
-            item.content
-          );
-
-        }
-      );
-
-    }
-
-
-    await loadConversations();
-
-
-    status.textContent =
-      "";
-
-
-    /*
-     * Close mobile sidebar.
-     */
-
-    sidebar.classList.remove(
-      "open"
-    );
-
+    statusEl.textContent = "";
+    openSidebar(false);
+    loadConversations();
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = "Unable to load conversation.";
   }
-
-  catch (error) {
-
-    console.error(error);
-
-    status.textContent =
-      "Unable to load conversation.";
-
-  }
-
 }
-
-
-/* =====================================================
-   NEW CHAT
-   ===================================================== */
 
 function newChat() {
-
+  window.speechSynthesis?.cancel();
   cid = null;
-
-  clearMessages();
-
   showWelcome();
-
-  input.value = "";
-
-  status.textContent = "";
-
+  inputEl.value = "";
+  statusEl.textContent = "";
+  openSidebar(false);
   loadConversations();
-
-  input.focus();
-
-  sidebar.classList.remove(
-    "open"
-  );
-
+  inputEl.focus();
 }
 
-
-/* =====================================================
-   DELETE CONVERSATION
-   ===================================================== */
-
-async function deleteConversation(
-  conversationId
-) {
-
-  const confirmed =
-    window.confirm(
-      "Delete this conversation?"
-    );
-
-
-  if (!confirmed) {
-    return;
+async function deleteConversation(id) {
+  if (!confirm("Delete this conversation?")) return;
+  try {
+    await api(`/conversations/${encodeURIComponent(id)}?user_id=${encodeURIComponent(uid)}`, {
+      method: "DELETE",
+    });
+    if (cid === id) newChat();
+    else loadConversations();
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = "Unable to delete conversation.";
   }
+}
 
+/* ---------- Send ---------- */
+async function sendMessage(text) {
+  text = text.trim();
+  if (!text || busy) return;
+
+  window.speechSynthesis?.cancel();
+  addMessage("user", text);
+  inputEl.value = "";
+  setBusy(true);
+  const typing = addTyping();
 
   try {
+    const data = await api("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cid,
+        persona: personaEl.value,
+        message: text,
+        user_id: uid,
+      }),
+    });
 
-    const response =
-      await fetch(
-        `${API_URL}/conversations/${encodeURIComponent(
-          conversationId
-        )}`,
-        {
-          method: "DELETE"
-        }
-      );
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        "Delete failed"
-      );
-
-    }
-
-
-    /*
-     * If we deleted the currently
-     * open conversation, start fresh.
-     */
-
-    if (
-      cid === conversationId
-    ) {
-
-      cid = null;
-
-      clearMessages();
-
-      showWelcome();
-
-    }
-
-
-    await loadConversations();
-
+    cid = data.cid;
+    typing.remove();
+    addMessage("assistant", data.answer, data.sources || []);
+    speak(data.answer);
+    loadConversations();
+  } catch (err) {
+    console.error(err);
+    typing.remove();
+    addMessage("assistant", "Sorry, something went wrong. Please try again.");
+  } finally {
+    setBusy(false);
   }
-
-  catch (error) {
-
-    console.error(error);
-
-    status.textContent =
-      "Unable to delete conversation.";
-
-  }
-
 }
 
-
-/* =====================================================
-   SEND MESSAGE
-   ===================================================== */
-
-async function sendMessage(
-  text
-) {
-
-  text =
-    text.trim();
-
-
-  if (!text) {
-    return;
-  }
-
-
-  addMessage(
-    "user",
-    text
-  );
-
-
-  input.value =
-    "";
-
-
-  status.textContent =
-    "Thinking...";
-
-
-  sendButton.disabled =
-    true;
-
-
-  try {
-
-    const response =
-      await fetch(
-        `${API_URL}/chat`,
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-
-          body:
-            JSON.stringify({
-              cid: cid,
-
-              persona:
-                persona.value,
-
-              message: text
-            })
-        }
-      );
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        await response.text()
-      );
-
-    }
-
-
-    const data =
-      await response.json();
-
-
-    cid =
-      data.cid;
-
-
-    addMessage(
-      "assistant",
-      data.answer,
-      data.sources || []
-    );
-
-
-    speak(
-      data.answer
-    );
-
-
-    /*
-     * Refresh sidebar so
-     * the current conversation
-     * appears immediately.
-     */
-
-    await loadConversations();
-
-  }
-
-  catch (error) {
-
-    console.error(error);
-
-    addMessage(
-      "assistant",
-      "Sorry, something went wrong."
-    );
-
-  }
-
-  finally {
-
-    sendButton.disabled =
-      false;
-
-    status.textContent =
-      "";
-
-  }
-
-}
-
-
-/* =====================================================
-   SEND BUTTON
-   ===================================================== */
-
-sendButton.addEventListener(
-  "click",
-  () => {
-
-    sendMessage(
-      input.value
-    );
-
-  }
-);
-
-
-/* =====================================================
-   ENTER KEY
-   ===================================================== */
-
-input.addEventListener(
-  "keydown",
-  event => {
-
-    if (
-      event.key === "Enter" &&
-      !event.shiftKey
-    ) {
-
-      event.preventDefault();
-
-      sendMessage(
-        input.value
-      );
-
-    }
-
-  }
-);
-
-
-/* =====================================================
-   NEW CHAT BUTTON
-   ===================================================== */
-
-newChatButton.addEventListener(
-  "click",
-  newChat
-);
-
-
-/* =====================================================
-   MOBILE SIDEBAR
-   ===================================================== */
-
-mobileHistoryButton.addEventListener(
-  "click",
-  () => {
-
-    sidebar.classList.toggle(
-      "open"
-    );
-
-  }
-);
-
-
-/* =====================================================
-   PERSONA CHANGE
-   ===================================================== */
-
-persona.addEventListener(
-  "change",
-  () => {
-
-    /*
-     * A different persona starts
-     * a separate conversation.
-     */
-
-    newChat();
-
-  }
-);
-
-
-/* =====================================================
-   TEXT TO SPEECH
-   ===================================================== */
-
+/* ---------- Text to speech ---------- */
 function speak(text) {
-
-  if (
-    !(
-      "speechSynthesis"
-      in window
-    )
-  ) {
-
-    return;
-
-  }
-
-
+  if (muted || !("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
-
-
-  const utterance =
-    new SpeechSynthesisUtterance(
-      text
-    );
-
-
-  utterance.rate =
-    1;
-
-
-  utterance.pitch =
-    1;
-
-
-  window.speechSynthesis.speak(
-    utterance
-  );
-
+  window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
 }
 
-
-/* =====================================================
-   VOICE RECORDING
-   ===================================================== */
-
-recordButton.addEventListener(
-  "click",
-  async () => {
-
-    /*
-     * Stop recording.
-     */
-
-    if (mediaRecorder) {
-
-      mediaRecorder.stop();
-
-      return;
-
-    }
-
-
-    try {
-
-      const stream =
-        await navigator
-          .mediaDevices
-          .getUserMedia({
-            audio: true
-          });
-
-
-      audioChunks = [];
-
-
-      /*
-       * Some browsers may not
-       * support audio/webm.
-       */
-
-      let options = {};
-
-      if (
-        MediaRecorder.isTypeSupported(
-          "audio/webm"
-        )
-      ) {
-
-        options.mimeType =
-          "audio/webm";
-
-      }
-
-
-      mediaRecorder =
-        new MediaRecorder(
-          stream,
-          options
-        );
-
-
-      mediaRecorder.ondataavailable =
-        event => {
-
-          if (
-            event.data.size > 0
-          ) {
-
-            audioChunks.push(
-              event.data
-            );
-
-          }
-
-        };
-
-
-      mediaRecorder.onstop =
-        async () => {
-
-          stream
-            .getTracks()
-            .forEach(
-              track =>
-                track.stop()
-            );
-
-
-          recordButton
-            .classList
-            .remove(
-              "recording"
-            );
-
-
-          recordButton.textContent =
-            "🎙";
-
-
-          const recorder =
-            mediaRecorder;
-
-
-          mediaRecorder =
-            null;
-
-
-          const blob =
-            new Blob(
-              audioChunks,
-              {
-                type:
-                  recorder.mimeType ||
-                  "audio/webm"
-              }
-            );
-
-
-          const form =
-            new FormData();
-
-
-          form.append(
-            "audio",
-            blob,
-            "recording.webm"
-          );
-
-
-          status.textContent =
-            "Transcribing...";
-
-
-          recordButton.disabled =
-            true;
-
-
-          try {
-
-            const response =
-              await fetch(
-                `${API_URL}/stt`,
-                {
-                  method: "POST",
-                  body: form
-                }
-              );
-
-
-            if (!response.ok) {
-
-              throw new Error(
-                await response.text()
-              );
-
-            }
-
-
-            const data =
-              await response.json();
-
-
-            if (
-              data.text &&
-              data.text.trim()
-            ) {
-
-              await sendMessage(
-                data.text
-              );
-
-            }
-
-            else {
-
-              status.textContent =
-                "No speech detected.";
-
-            }
-
-          }
-
-          catch (error) {
-
-            console.error(
-              error
-            );
-
-
-            status.textContent =
-              "Transcription failed.";
-
-          }
-
-          finally {
-
-            recordButton.disabled =
-              false;
-
-          }
-
-        };
-
-
-      mediaRecorder.start();
-
-
-      recordButton
-        .classList
-        .add(
-          "recording"
-        );
-
-
-      recordButton.textContent =
-        "⏹";
-
-
-      status.textContent =
-        "Recording...";
-
-    }
-
-    catch (error) {
-
-      console.error(
-        error
-      );
-
-
-      status.textContent =
-        "Microphone permission failed.";
-
-    }
-
+function renderMute() {
+  muteButton.textContent = muted ? "🔇" : "🔊";
+}
+
+muteButton.addEventListener("click", () => {
+  muted = !muted;
+  try { localStorage.setItem("muted", muted ? "1" : "0"); } catch {}
+  if (muted) window.speechSynthesis?.cancel();
+  renderMute();
+});
+
+/* ---------- Voice recording ---------- */
+recordButton.addEventListener("click", async () => {
+  if (mediaRecorder) {
+    mediaRecorder.stop();
+    return;
   }
-);
 
+  try {
+    window.speechSynthesis?.cancel();
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
 
-/* =====================================================
-   INITIAL LOAD
-   ===================================================== */
+    const options = MediaRecorder.isTypeSupported("audio/webm") ? { mimeType: "audio/webm" } : {};
+    const recorder = new MediaRecorder(stream, options);
+    mediaRecorder = recorder;
 
+    recorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+
+    recorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      mediaRecorder = null;
+      recordButton.classList.remove("recording");
+      recordButton.textContent = "🎙";
+
+      const type = recorder.mimeType || "audio/webm";
+      const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
+      const form = new FormData();
+      form.append("audio", new Blob(audioChunks, { type }), `recording.${ext}`);
+
+      statusEl.textContent = "Transcribing...";
+      recordButton.disabled = true;
+
+      try {
+        const data = await api("/stt", { method: "POST", body: form });
+        if (data.text && data.text.trim()) {
+          statusEl.textContent = "";
+          await sendMessage(data.text);
+        } else {
+          statusEl.textContent = "No speech detected.";
+        }
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Transcription failed.";
+      } finally {
+        recordButton.disabled = false;
+      }
+    };
+
+    recorder.start();
+    recordButton.classList.add("recording");
+    recordButton.textContent = "⏹";
+    statusEl.textContent = "Recording... tap again to stop.";
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = "Microphone permission failed.";
+  }
+});
+
+/* ---------- Events ---------- */
+sendButton.addEventListener("click", () => sendMessage(inputEl.value));
+
+inputEl.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage(inputEl.value);
+  }
+});
+
+$("newChatButton").addEventListener("click", newChat);
+$("mobileHistoryButton").addEventListener("click", () => openSidebar(!sidebar.classList.contains("open")));
+backdrop.addEventListener("click", () => openSidebar(false));
+personaEl.addEventListener("change", newChat);
+
+/* ---------- Init ---------- */
+renderMute();
+showWelcome();
 loadConversations();
-
 </script>
-
 </body>
-
 </html>
