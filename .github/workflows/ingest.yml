@@ -20,41 +20,94 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Locate backend folder
+      - name: "1. Locate backend folder"
         id: find
         run: |
           FILE=$(find . -name ingest.py -not -path './.git/*' | head -1)
-          echo "Found: $FILE"
           if [ -z "$FILE" ]; then
-            echo "ingest.py not found in this branch"
+            echo "::error title=ingest.py not found::ingest.py is not in this branch. Push it to main."
+            find . -not -path './.git/*' -type f | head -40
             exit 1
           fi
+          echo "Found: $FILE"
           echo "dir=$(dirname "$FILE")" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
+      - name: "2. Install dependencies"
         working-directory: ${{ steps.find.outputs.dir }}
-        run: pip install -r requirements.txt
+        run: |
+          ls -la
+          if [ ! -f requirements.txt ]; then
+            echo "::error title=requirements.txt missing::No requirements.txt in $(pwd)"
+            exit 1
+          fi
+          pip install -r requirements.txt
 
-      - name: Check secrets are present
+      - name: "3. Check secrets"
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SITE_URL: ${{ secrets.SITE_URL }}
         run: |
+          MISSING=""
           for v in MONGO_URI GEMINI_API_KEY SITE_URL; do
-            if [ -z "${!v}" ]; then echo "MISSING SECRET: $v"; exit 1; fi
+            if [ -z "${!v}" ]; then MISSING="$MISSING $v"; fi
           done
-          echo "All secrets present"
+          if [ -n "$MISSING" ]; then
+            echo "::error title=Missing secrets::Add these repository secrets:$MISSING"
+            exit 1
+          fi
+          echo "All required secrets are present."
 
-      - name: Run ingestion
+      - name: "4. Check MongoDB and Gemini connections"
+        working-directory: ${{ steps.find.outputs.dir }}
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python -u - <<'EOF' 2>&1 | tee /tmp/check.log
+          import sys, traceback
+          try:
+              from core import db, embed
+              db.command("ping")
+              print("MongoDB: OK")
+          except Exception:
+              print("MongoDB: FAILED")
+              traceback.print_exc()
+              sys.exit(1)
+          try:
+              v = embed(["test"], "RETRIEVAL_QUERY")
+              print("Gemini embeddings: OK, dim =", len(v[0]))
+          except Exception:
+              print("Gemini: FAILED")
+              traceback.print_exc()
+              sys.exit(1)
+          EOF
+          exit ${PIPESTATUS[0]}
+
+      - name: "5. Run ingestion"
         working-directory: ${{ steps.find.outputs.dir }}
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SITE_URL: ${{ secrets.SITE_URL }}
           FIA_URL: ${{ secrets.FIA_URL }}
-        run: python -u ingest.py --persona "${{ inputs.persona || 'both' }}"
+        run: |
+          set -o pipefail
+          python -u ingest.py --persona "${{ inputs.persona || 'both' }}" 2>&1 | tee /tmp/ingest.log
+
+      - name: Show error summary
+        if: failure()
+        run: |
+          {
+            echo "## Ingestion failed"
+            echo "Last lines of output:"
+            echo '```'
+            tail -n 25 /tmp/ingest.log 2>/dev/null || tail -n 25 /tmp/check.log 2>/dev/null || echo "See the failed step above."
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          LAST=$(tail -n 3 /tmp/ingest.log 2>/dev/null || tail -n 3 /tmp/check.log 2>/dev/null)
+          echo "::error title=Ingestion failed::$LAST"
