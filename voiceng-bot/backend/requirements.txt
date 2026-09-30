@@ -2,6 +2,7 @@ fastapi
 python-multipart
 python-dotenv
 pymongo[srv]
-google-genai
+huggingface_hub
+numpy
 beautifulsoup4
 requests
