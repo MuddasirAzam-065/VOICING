@@ -1,31 +1,29 @@
 import traceback
-from core import db, hf, embed, search, CHAT_MODEL
+from core import db, embed
 
 print("chunks in db:", db.chunks.count_documents({}))
+print("by persona:", list(db.chunks.aggregate([
+    {"$group": {"_id": "$persona", "n": {"$sum": 1}}}
+])))
 
-try:
-    print("embed dim:", len(embed(["test"], "query")[0]))
-except Exception:
-    traceback.print_exc()
+sample = db.chunks.find_one({}, {"_id": 0, "embedding": 1, "title": 1})
+print("stored embedding dim:", len(sample["embedding"]) if sample else None)
+print("sample title:", sample["title"] if sample else None)
 
-try:
-    hits = db.chunks.aggregate([
-        {"$vectorSearch": {"index": "vector_index", "path": "embedding",
-                           "queryVector": embed(["What is VoiceNG?"], "query")[0],
-                           "numCandidates": 100, "limit": 5,
-                           "filter": {"persona": "voiceng"}}},
-        {"$project": {"_id": 0, "url": 1, "score": {"$meta": "vectorSearchScore"}}},
-    ])
-    print("raw search hits:", list(hits))
-except Exception:
-    traceback.print_exc()
-
-for model in [CHAT_MODEL, "meta-llama/Llama-3.1-8B-Instruct",
-              "Qwen/Qwen2.5-72B-Instruct", "meta-llama/Llama-3.3-70B-Instruct"]:
+for q in ["What is VoiceNG?", "VoiceNG What is VoiceNG?", "services"]:
     try:
-        r = hf.chat_completion(model=model,
-                               messages=[{"role": "user", "content": "Say hi"}],
-                               max_tokens=20)
-        print("OK  ", model, "->", r.choices[0].message.content)
-    except Exception as e:
-        print("FAIL", model, "->", repr(e)[:200])
+        vec = embed([q], "query")[0]
+        hits = list(db.chunks.aggregate([
+            {"$vectorSearch": {"index": "vector_index", "path": "embedding",
+                               "queryVector": vec, "numCandidates": 100,
+                               "limit": 5, "filter": {"persona": "voiceng"}}},
+            {"$project": {"_id": 0, "url": 1,
+                          "score": {"$meta": "vectorSearchScore"}}},
+        ]))
+        print(f"\nQ: {q}")
+        for h in hits:
+            print(f"  {h['score']:.3f}  {h['url']}")
+        if not hits:
+            print("  NO HITS")
+    except Exception:
+        traceback.print_exc()
