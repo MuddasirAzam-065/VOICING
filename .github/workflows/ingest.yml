@@ -38,10 +38,12 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-
-      - name: "2. Install dependencies"
+          
+      - name: "2b. Install headless browser"
         working-directory: ${{ steps.find.outputs.dir }}
-        run: pip install -r requirements.txt
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
 
       - name: "3. Check secrets"
         run: |
