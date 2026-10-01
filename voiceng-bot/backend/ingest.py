@@ -1,6 +1,5 @@
-
 import argparse
-import re
+import sys
 import time
 from collections import deque
 from urllib.parse import urljoin, urlparse
@@ -15,6 +14,7 @@ from personas import PERSONAS
 USER_AGENT = "VoiceNG-KB-Bot/1.0"
 SKIP_EXT = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".pdf", ".zip",
             ".mp4", ".mp3", ".avi", ".mov", ".doc", ".docx", ".xls", ".xlsx")
+BATCH = 16
 
 
 def normalize(url: str) -> str:
@@ -32,12 +32,17 @@ def extract(html: str, base_url: str):
     parts = []
     for el in main.find_all(["h1", "h2", "h3", "h4", "p", "li", "td"]):
         text = el.get_text(" ", strip=True)
-        if not text:
-            continue
-        parts.append(f"## {text}" if el.name.startswith("h") else text)
+        if text:
+            parts.append(f"## {text}" if el.name.startswith("h") else text)
+    text = "\n".join(parts)
+
+    # fallback for pages built from plain <div>/<span> elements
+    if len(text.split()) < 30:
+        lines = [l.strip() for l in main.get_text("\n").splitlines() if l.strip()]
+        text = "\n".join(lines)
 
     links = [normalize(urljoin(base_url, a["href"])) for a in soup.find_all("a", href=True)]
-    return title, "\n".join(parts), links
+    return title, text, links
 
 
 def crawl(persona: str) -> list[dict]:
@@ -46,41 +51,62 @@ def crawl(persona: str) -> list[dict]:
     if not seed:
         raise RuntimeError(f"No seed URL configured for {persona}")
 
+    render = cfg.get("render", False)
     host = urlparse(seed).netloc
     queue, visited, pages = deque([normalize(seed)]), set(), []
     session = requests.Session()
     session.headers["User-Agent"] = USER_AGENT
 
-    while queue and len(pages) < cfg["max_pages"]:
-        url = queue.popleft()
-        if url in visited or url.lower().endswith(SKIP_EXT):
-            continue
-        visited.add(url)
+    pw = browser = page = None
+    if render:
+        from playwright.sync_api import sync_playwright
+        pw = sync_playwright().start()
+        browser = pw.chromium.launch()
+        page = browser.new_page(user_agent=USER_AGENT)
 
-        print(f"[crawl] {len(pages) + 1}/{cfg['max_pages']} {url}")
-        try:
-            r = session.get(url, timeout=20)
-            r.raise_for_status()
-        except Exception as exc:
-            print(f"[crawl] failed: {exc}")
-            continue
+    try:
+        while queue and len(pages) < cfg["max_pages"]:
+            url = queue.popleft()
+            if url in visited or url.lower().endswith(SKIP_EXT):
+                continue
+            visited.add(url)
 
-        if "text/html" not in r.headers.get("content-type", "").lower():
-            continue
+            print(f"[crawl] {len(pages) + 1}/{cfg['max_pages']} {url}")
+            try:
+                if render:
+                    page.goto(url, wait_until="networkidle", timeout=45000)
+                    page.wait_for_timeout(1500)
+                    html, final_url = page.content(), page.url
+                else:
+                    r = session.get(url, timeout=20)
+                    r.raise_for_status()
+                    if "text/html" not in r.headers.get("content-type", "").lower():
+                        continue
+                    html, final_url = r.text, r.url
+            except Exception as exc:
+                print(f"[crawl] failed: {exc}")
+                continue
 
-        title, text, links = extract(r.text, r.url)
-        if len(text.split()) >= 30:
-            pages.append({"url": normalize(r.url), "title": title, "text": text})
+            title, text, links = extract(html, final_url)
+            words = len(text.split())
+            print(f"[crawl]   {words} words")
+            if words >= 30:
+                pages.append({"url": normalize(final_url), "title": title, "text": text})
 
-        for link in links:
-            if urlparse(link).netloc == host and link not in visited:
-                queue.append(link)
-        time.sleep(0.15)
+            for link in links:
+                if urlparse(link).netloc == host and link not in visited:
+                    queue.append(link)
+            time.sleep(0.15)
+    finally:
+        if browser:
+            browser.close()
+        if pw:
+            pw.stop()
 
     return pages
 
 
-def split_text(text: str, size: int = 200, overlap: int = 40) -> list[str]:
+def split_text(text: str, size: int = 300, overlap: int = 50) -> list[str]:
     words = text.split()
     chunks, step = [], size - overlap
     for start in range(0, len(words), step):
@@ -90,7 +116,19 @@ def split_text(text: str, size: int = 200, overlap: int = 40) -> list[str]:
     return chunks
 
 
-def index_pages(persona: str, pages: list[dict]):
+def embed_with_retry(texts: list[str]) -> list[list[float]]:
+    for attempt in range(6):
+        try:
+            return embed(texts, "document")
+        except Exception as exc:
+            if attempt == 5:
+                raise
+            wait = 15 * (attempt + 1)
+            print(f"Embedding failed ({repr(exc)[:120]}), retrying in {wait}s...")
+            time.sleep(wait)
+
+
+def index_pages(persona: str, pages: list[dict]) -> bool:
     records = []
     for page in pages:
         for chunk in split_text(page["text"]):
@@ -102,20 +140,22 @@ def index_pages(persona: str, pages: list[dict]):
             })
 
     if not records:
-        print("Nothing to index.")
-        return
+        print(f"::error::No usable text found for {persona}. Old data kept.")
+        return False
 
-    print(f"Embedding {len(records)} chunks...")
-    for i in range(0, len(records), 50):
-        batch = records[i:i + 50]
-        vectors = embed([r["text"] for r in batch], "RETRIEVAL_DOCUMENT")
+    total = len(records)
+    print(f"Embedding {total} chunks...")
+    for i in range(0, total, BATCH):
+        batch = records[i:i + BATCH]
+        vectors = embed_with_retry([r["text"] for r in batch])
         for rec, vec in zip(batch, vectors):
             rec["embedding"] = vec
-        time.sleep(1)  # stay inside free-tier rate limits
+        print(f"  {min(i + BATCH, total)}/{total}")
 
     db.chunks.delete_many({"persona": persona})
     db.chunks.insert_many(records)
-    print(f"Inserted {len(records)} chunks for {persona}")
+    print(f"Inserted {total} chunks for {persona}")
+    return True
 
 
 def ensure_vector_index():
@@ -144,7 +184,16 @@ if __name__ == "__main__":
     args = p.parse_args()
 
     targets = ["voiceng", "fia"] if args.persona == "both" else [args.persona]
+    failed = []
     for name in targets:
         print(f"=== {name} ===")
-        index_pages(name, crawl(name))
+        try:
+            if not index_pages(name, crawl(name)):
+                failed.append(name)
+        except Exception as exc:
+            print(f"::error::{name} failed: {repr(exc)[:300]}")
+            failed.append(name)
+
     ensure_vector_index()
+    if failed:
+        sys.exit(f"Failed personas: {', '.join(failed)}")
