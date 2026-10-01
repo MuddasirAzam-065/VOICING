@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 
 import numpy as np
@@ -23,6 +24,7 @@ _EMBED_POOL = ThreadPoolExecutor(max_workers=4)
 _GEMINI_SESSION = requests.Session()
 
 ERROR_MESSAGE = "Sorry, I'm having trouble answering right now. Please try again."
+PROVIDER_RETRIES = 2
 
 db = MongoClient(os.environ["MONGO_URI"], serverSelectionTimeoutMS=10000)["voiceng"]
 hf = InferenceClient(api_key=os.environ["HF_TOKEN"])
@@ -125,20 +127,60 @@ def answer_question(persona: str, question: str, history: list[dict]):
 
     if not answer:
         try:
+            answer = _hf_answer(messages)
+        except Exception as exc:
+            print("HF CHAT ERROR:", type(exc).__name__)
+
+    answer = answer or _retrieval_fallback(docs, cfg)
+    answer = answer or ERROR_MESSAGE
+
+    sources = list(dict.fromkeys(d["url"] for d in docs if d.get("url")))
+    return answer, sources
+
+
+def _hf_answer(messages: list[dict]) -> str:
+    for attempt in range(PROVIDER_RETRIES):
+        try:
             response = hf.chat_completion(
                 model=CHAT_MODEL,
                 messages=messages,
                 temperature=0.2,
                 max_tokens=500,
             )
-            answer = (response.choices[0].message.content or "").strip()
-        except Exception as exc:
-            print("HF CHAT ERROR:", type(exc).__name__)
+            choices = getattr(response, "choices", None) or []
+            if not choices:
+                continue
+            message = getattr(choices[0], "message", None)
+            answer = getattr(message, "content", "") if message else ""
+            if isinstance(answer, list):
+                answer = "".join(
+                    part.get("text", "") for part in answer if isinstance(part, dict)
+                )
+            answer = answer.strip() if isinstance(answer, str) else ""
+            if answer:
+                return answer
+        except Exception:
+            if attempt + 1 == PROVIDER_RETRIES:
+                raise
+            time.sleep(0.35)
+    return ""
 
-    answer = answer or ERROR_MESSAGE
 
-    sources = list(dict.fromkeys(d["url"] for d in docs if d.get("url")))
-    return answer, sources
+def _retrieval_fallback(docs: list[dict], cfg: dict) -> str:
+    if not docs:
+        return ""
+    excerpts = []
+    for doc in docs[:2]:
+        text = " ".join(doc.get("text", "").split())
+        if text:
+            excerpts.append(text[:700].rstrip())
+    if not excerpts:
+        return ""
+    return (
+        f"I couldn't generate a full response, but I found this information in the "
+        f"{cfg['org']} knowledge base:\n\n"
+        + "\n\n".join(f"- {excerpt}" for excerpt in excerpts)
+    )
 
 
 def _gemini_answer(system_prompt: str, history: list[dict], question: str) -> str:
@@ -163,10 +205,11 @@ def _gemini_answer(system_prompt: str, history: list[dict], question: str) -> st
     )
     response.raise_for_status()
     result = response.json()
-    return "".join(
-        part.get("text", "")
-        for part in result.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-    ).strip()
+    candidates = result.get("candidates") or []
+    if not candidates:
+        return ""
+    parts = candidates[0].get("content", {}).get("parts", [])
+    return "".join(part.get("text", "") for part in parts).strip()
 
 
 def transcribe(audio_bytes: bytes, mime_type: str) -> str:
