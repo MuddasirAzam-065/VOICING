@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 
 import numpy as np
@@ -26,6 +27,26 @@ ERROR_MESSAGE = "Sorry, I'm having trouble answering right now. Please try again
 
 db = MongoClient(os.environ["MONGO_URI"], serverSelectionTimeoutMS=10000)["voiceng"]
 hf = InferenceClient(api_key=os.environ["HF_TOKEN"])
+
+
+def _language_instruction(question: str) -> str:
+    lowered = question.lower()
+    asks_english = bool(re.search(r"\benglish\b|انگریزی", lowered))
+    asks_urdu = bool(re.search(r"\burdu\b|اردو", lowered))
+    roman_urdu_words = {
+        "mujhe", "mughe", "batao", "bata", "kya", "kia", "kea", "hai",
+        "hain", "kaise", "kaisay", "kyun", "kyon", "mein", "main", "mujh",
+        "aap", "ap", "baat", "karo", "karna", "chahiye", "nahi", "nahin",
+        "yeh", "ye", "woh", "aur", "ke", "ki", "ka", "ko", "se",
+    }
+    words = set(re.findall(r"[a-z]+", lowered))
+    looks_like_roman_urdu = len(words & roman_urdu_words) >= 2
+
+    if asks_english and not asks_urdu:
+        return "LANGUAGE DIRECTIVE: Answer in English."
+    if asks_urdu or looks_like_roman_urdu:
+        return "LANGUAGE DIRECTIVE: Answer in Urdu script (not Roman Urdu and not English)."
+    return "LANGUAGE DIRECTIVE: Answer in the same language as the user's question."
 
 
 def _embed_one(text: str) -> list[float]:
@@ -100,7 +121,7 @@ def answer_question(persona: str, question: str, history: list[dict]):
         label=cfg["label"],
         org=cfg["org"],
         context=build_context(docs),
-    )
+    ) + "\n\n" + _language_instruction(question)
 
     messages = [{"role": "system", "content": system_prompt}]
     messages += [{"role": m["role"], "content": m["content"]} for m in history]
