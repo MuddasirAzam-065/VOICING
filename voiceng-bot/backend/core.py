@@ -139,6 +139,7 @@ def answer_question(persona: str, question: str, history: list[dict]):
 
 
 def _hf_answer(messages: list[dict]) -> str:
+    last_error = None
     for attempt in range(PROVIDER_RETRIES):
         try:
             response = hf.chat_completion(
@@ -159,10 +160,31 @@ def _hf_answer(messages: list[dict]) -> str:
             answer = answer.strip() if isinstance(answer, str) else ""
             if answer:
                 return answer
-        except Exception:
+        except Exception as exc:
+            last_error = exc
             if attempt + 1 == PROVIDER_RETRIES:
-                raise
+                break
             time.sleep(0.35)
+
+    try:
+        prompt = "\n\n".join(
+            f"{message['role'].capitalize()}: {message['content']}"
+            for message in messages
+        ) + "\n\nAssistant:"
+        answer = hf.text_generation(
+            prompt,
+            model=CHAT_MODEL,
+            temperature=0.2,
+            max_new_tokens=500,
+            return_full_text=False,
+        )
+        if isinstance(answer, str) and answer.strip():
+            return answer.strip()
+    except Exception as exc:
+        last_error = exc
+
+    if last_error:
+        raise last_error
     return ""
 
 
