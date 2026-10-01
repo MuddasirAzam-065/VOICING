@@ -154,7 +154,9 @@ def answer_question(persona: str, question: str, history: list[dict]):
         try:
             answer = _groq_answer(messages)
         except Exception as exc:
-            print("GROQ CHAT ERROR:", type(exc).__name__)
+            response = getattr(exc, "response", None)
+            detail = getattr(response, "text", "")[:180] if response else ""
+            print("GROQ CHAT ERROR:", type(exc).__name__, detail)
 
     if os.getenv("GEMINI_API_KEY"):
         try:

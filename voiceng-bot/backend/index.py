@@ -161,7 +161,9 @@ def debug():
 
     out = {}
     for name, fn in [
-        ("env", lambda: {k: bool(os.getenv(k)) for k in ["MONGO_URI", "HF_TOKEN"]}),
+        ("env", lambda: {k: bool(os.getenv(k)) for k in [
+            "MONGO_URI", "HF_TOKEN", "GROQ_API_KEY", "GEMINI_API_KEY",
+        ]}),
         ("mongo", lambda: db.command("ping")["ok"]),
         ("chunks_count", lambda: db.chunks.count_documents({})),
         ("embed", lambda: len(embed(["test"], "query")[0])),
