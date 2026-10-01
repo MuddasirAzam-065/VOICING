@@ -78,8 +78,17 @@ def crawl(persona: str) -> list[dict]:
                     page.wait_for_timeout(1500)
                     html, final_url = page.content(), page.url
                 else:
-                    r = session.get(url, timeout=20)
-                    r.raise_for_status()
+                    r = None
+                    for attempt in range(3):
+                        try:
+                            r = session.get(url, timeout=60)
+                            r.raise_for_status()
+                            break
+                        except requests.RequestException as exc:
+                            if attempt == 2:
+                                raise
+                            print(f"[crawl] retry {attempt + 1} for {url}: {repr(exc)[:80]}")
+                            time.sleep(5 * (attempt + 1))
                     if "text/html" not in r.headers.get("content-type", "").lower():
                         continue
                     html, final_url = r.text, r.url
