@@ -33,10 +33,8 @@ PERSONAS = {
     "fia": {
         "label": "FIA FAQ Assistant",
         "org": "FIA",
-        "seed": os.getenv(
-            "FIA_URL",
-            "https://www.fia.gov.pk"
-        ).rstrip("/"),
+        "seed": os.getenv("FIA_URL","").rstrip("/"),
         "max_pages": 80,
+      "render": True,
     },
 }
