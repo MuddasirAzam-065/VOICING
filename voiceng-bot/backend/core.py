@@ -15,7 +15,7 @@ from personas import PERSONAS, PROMPT
 load_dotenv()
 
 CHAT_MODEL = os.getenv("CHAT_MODEL", "Qwen/Qwen2.5-3B-Instruct")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 GROQ_PREFERRED_MODELS = (
     "openai/gpt-oss-20b",
     "openai/gpt-oss-120b",
