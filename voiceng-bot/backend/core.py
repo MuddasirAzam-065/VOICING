@@ -30,10 +30,12 @@ ERROR_MESSAGE = "Sorry, I'm having trouble answering right now. Please try again
 PROVIDER_RETRIES = 2
 
 db = MongoClient(os.environ["MONGO_URI"], serverSelectionTimeoutMS=10000)["voiceng"]
-hf = InferenceClient(api_key=os.environ["HF_TOKEN"])
+hf = InferenceClient(api_key=os.getenv("HF_TOKEN"))
 
 
 def _embed_one(text: str) -> list[float]:
+    if not os.getenv("HF_TOKEN"):
+        raise RuntimeError("HF_TOKEN is required for embeddings")
     vec = np.array(hf.feature_extraction(text, model=EMBED_MODEL), dtype="float32")
     if vec.ndim > 1:                      # token-level output -> mean pool
         vec = vec.reshape(-1, vec.shape[-1]).mean(axis=0)
@@ -86,7 +88,8 @@ def _cached_search(query: str, persona: str) -> tuple[dict, ...]:
 
 def search(query: str, persona: str) -> list[dict]:
     try:
-        return list(_cached_search(query, persona))
+        results = list(_cached_search(query, persona))
+        return results or list(_keyword_search(query, persona))
     except Exception as exc:
         print("VECTOR SEARCH ERROR:", type(exc).__name__)
         return _keyword_search(query, persona)

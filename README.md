@@ -40,4 +40,4 @@ The backend exposes these routes (interactive schema at `/docs`):
 
 ## Knowledge base
 
-`voiceng-bot/backend/ingest.py` ingests site content into MongoDB Atlas. Configure the persona site URLs and ensure the Atlas vector index is named `vector_index` with a `persona` filter and 384-dimensional `embedding` field before using retrieval.
+`voiceng-bot/backend/ingest.py` ingests site content into MongoDB Atlas. With `HF_TOKEN`, it stores embeddings and uses Atlas vector search. Without `HF_TOKEN`, ingestion still stores text chunks and the backend uses MongoDB keyword retrieval; Groq cannot create embeddings, so no Groq key is needed for ingestion. Configure the persona site URLs and ensure the Atlas vector index is named `vector_index` with a `persona` filter and 384-dimensional `embedding` field when using vector search.

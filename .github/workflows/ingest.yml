@@ -46,7 +46,7 @@ jobs:
       - name: "3. Check secrets"
         run: |
           MISSING=""
-          for v in MONGO_URI HF_TOKEN SITE_URL; do
+          for v in MONGO_URI SITE_URL; do
             if [ -z "${!v}" ]; then MISSING="$MISSING $v"; fi
           done
           if [ -n "$MISSING" ]; then
@@ -55,10 +55,10 @@ jobs:
           fi
           echo "All required secrets are present."
 
-      - name: "4. Check MongoDB and embeddings"
+      - name: "4. Check MongoDB and optional embeddings"
         run: |
           python -u - <<'EOF'
-          import sys, traceback
+          import os, sys, traceback
           try:
               from core import db, embed
           except Exception:
@@ -72,13 +72,14 @@ jobs:
               print("MongoDB: FAILED")
               traceback.print_exc()
               sys.exit(1)
-          try:
-              v = embed(["test"], "query")
-              print("HF embeddings: OK, dim =", len(v[0]))
-          except Exception:
-              print("HF embeddings: FAILED")
-              traceback.print_exc()
-              sys.exit(1)
+            if os.getenv("HF_TOKEN"):
+              try:
+                v = embed(["test"], "query")
+                print("HF embeddings: OK, dim =", len(v[0]))
+              except Exception:
+                print("HF embeddings: unavailable; ingestion will use keyword retrieval.")
+            else:
+              print("HF embeddings: skipped; ingestion will use keyword retrieval.")
           EOF
 
       - name: "5. Run ingestion"

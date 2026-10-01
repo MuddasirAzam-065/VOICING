@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 import time
 from collections import deque
@@ -160,13 +161,16 @@ def index_pages(persona: str, pages: list[dict]) -> bool:
         return False
 
     total = len(records)
-    print(f"Embedding {total} chunks...")
-    for i in range(0, total, BATCH):
-        batch = records[i:i + BATCH]
-        vectors = embed_with_retry([r["text"] for r in batch])
-        for rec, vec in zip(batch, vectors):
-            rec["embedding"] = vec
-        print(f"  {min(i + BATCH, total)}/{total}")
+    if os.getenv("HF_TOKEN"):
+        print(f"Embedding {total} chunks...")
+        for i in range(0, total, BATCH):
+            batch = records[i:i + BATCH]
+            vectors = embed_with_retry([r["text"] for r in batch])
+            for rec, vec in zip(batch, vectors):
+                rec["embedding"] = vec
+            print(f"  {min(i + BATCH, total)}/{total}")
+    else:
+        print("HF_TOKEN is not set; storing text chunks for keyword retrieval.")
 
     db.chunks.delete_many({"persona": persona})
     db.chunks.insert_many(records)
