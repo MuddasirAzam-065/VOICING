@@ -11,7 +11,10 @@ from pymongo.operations import SearchIndexModel
 from core import EMBED_DIM, db, embed
 from personas import PERSONAS
 
-USER_AGENT = "VoiceNG-KB-Bot/1.0"
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
 SKIP_EXT = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".pdf", ".zip",
             ".mp4", ".mp3", ".avi", ".mov", ".doc", ".docx", ".xls", ".xlsx")
 BATCH = 16
@@ -55,7 +58,11 @@ def crawl(persona: str) -> list[dict]:
     host = urlparse(seed).netloc
     queue, visited, pages = deque([normalize(seed)]), set(), []
     session = requests.Session()
-    session.headers["User-Agent"] = USER_AGENT
+    session.headers.update({
+        "User-Agent": USER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    })
 
     pw = browser = page = None
     if render:
