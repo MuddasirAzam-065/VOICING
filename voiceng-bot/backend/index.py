@@ -157,7 +157,7 @@ def delete_conversation(cid: str, user_id: str):
 @app.get("/debug")
 def debug():
     import traceback
-    from core import embed, search
+    from core import embed, groq_probe, search
 
     out = {}
     for name, fn in [
@@ -168,6 +168,7 @@ def debug():
         ("chunks_count", lambda: db.chunks.count_documents({})),
         ("embed", lambda: len(embed(["test"], "query")[0])),
         ("search", lambda: len(search("VoiceNG", "voiceng"))),
+        ("groq", groq_probe),
     ]:
         try:
             out[name] = fn()

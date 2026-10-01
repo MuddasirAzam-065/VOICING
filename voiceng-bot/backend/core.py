@@ -252,6 +252,41 @@ def _groq_answer(messages: list[dict]) -> str:
     return (choices[0].get("message", {}).get("content") or "").strip()
 
 
+def groq_probe() -> dict:
+    if not os.getenv("GROQ_API_KEY"):
+        return {"configured": False}
+    response = _GROQ_SESSION.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": GROQ_MODEL,
+            "messages": [{"role": "user", "content": "Reply with OK."}],
+            "max_tokens": 4,
+        },
+        timeout=15,
+    )
+    if response.ok:
+        return {"configured": True, "ok": True, "model": GROQ_MODEL}
+    try:
+        body = response.json()
+        error = body.get("error", {})
+        message = error.get("message", "provider rejected request")
+        code = error.get("code")
+    except ValueError:
+        message, code = "provider rejected request", None
+    return {
+        "configured": True,
+        "ok": False,
+        "status": response.status_code,
+        "code": code,
+        "message": message[:180],
+        "model": GROQ_MODEL,
+    }
+
+
 def _retrieval_fallback(docs: list[dict], cfg: dict) -> str:
     if not docs:
         return ""
