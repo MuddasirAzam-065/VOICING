@@ -12,7 +12,7 @@ pip install -r requirements.txt
 uvicorn index:app --reload
 ```
 
-Set `MONGO_URI` in the backend environment. Add `GROQ_API_KEY` for the recommended fast free chat provider; it uses `GROQ_MODEL` (default `llama-3.1-8b-instant`). `GEMINI_API_KEY` is optional and remains a fallback; it uses `GEMINI_MODEL` (default `gemini-3.1-flash-lite`). `HF_TOKEN` is still used when available for embeddings, speech transcription, and final chat fallback, but chat and retrieval can continue without it. The Groq, Gemini, and Hugging Face free tiers can be throttled or rejected when quotas run out.
+Set `MONGO_URI` in the backend environment. Add `GROQ_API_KEY` for the recommended fast free chat provider; it uses `GROQ_MODEL` (default `llama-3.3-70b-versatile`). `GEMINI_API_KEY` is optional and remains a fallback; it uses `GEMINI_MODEL` (default `gemini-3.1-flash-lite`). `HF_TOKEN` is still used when available for embeddings, speech transcription, and final chat fallback, but chat and retrieval can continue without it. The Groq, Gemini, and Hugging Face free tiers can be throttled or rejected when quotas run out.
 
 Repeated embeddings and searches are cached in process memory, and the backend reuses worker threads plus its provider HTTP connections. Retrieval uses the four strongest matching chunks to limit model input size. Conversation indexes are created automatically at backend startup. Groq is primary when `GROQ_API_KEY` is set, followed by Gemini and Hugging Face. If Atlas or embedding retrieval fails, retrieval automatically uses MongoDB keyword matching, so the knowledge base remains usable after HF credits expire.
 

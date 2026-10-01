@@ -16,6 +16,7 @@ load_dotenv()
 
 CHAT_MODEL = os.getenv("CHAT_MODEL", "Qwen/Qwen2.5-3B-Instruct")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+GROQ_FALLBACK_MODEL = "llama-3.3-70b-versatile"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 STT_MODEL = os.getenv("STT_MODEL", "openai/whisper-large-v3-turbo")
@@ -231,20 +232,24 @@ def _hf_answer(messages: list[dict]) -> str:
 
 
 def _groq_answer(messages: list[dict]) -> str:
-    response = _GROQ_SESSION.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": GROQ_MODEL,
-            "messages": messages,
-            "temperature": 0.2,
-            "max_tokens": 500,
-        },
-        timeout=25,
-    )
+    response = None
+    for model in dict.fromkeys((GROQ_MODEL, GROQ_FALLBACK_MODEL)):
+        response = _GROQ_SESSION.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "messages": messages,
+                "temperature": 0.2,
+                "max_tokens": 500,
+            },
+            timeout=25,
+        )
+        if response.status_code != 404:
+            break
     response.raise_for_status()
     choices = response.json().get("choices") or []
     if not choices:
@@ -255,21 +260,27 @@ def _groq_answer(messages: list[dict]) -> str:
 def groq_probe() -> dict:
     if not os.getenv("GROQ_API_KEY"):
         return {"configured": False}
-    response = _GROQ_SESSION.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": GROQ_MODEL,
-            "messages": [{"role": "user", "content": "Reply with OK."}],
-            "max_tokens": 4,
-        },
-        timeout=15,
-    )
+    response = None
+    tested_model = GROQ_MODEL
+    for model in dict.fromkeys((GROQ_MODEL, GROQ_FALLBACK_MODEL)):
+        tested_model = model
+        response = _GROQ_SESSION.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": "Reply with OK."}],
+                "max_tokens": 4,
+            },
+            timeout=15,
+        )
+        if response.status_code != 404:
+            break
     if response.ok:
-        return {"configured": True, "ok": True, "model": GROQ_MODEL}
+        return {"configured": True, "ok": True, "model": tested_model}
     try:
         body = response.json()
         error = body.get("error", {})
@@ -283,7 +294,7 @@ def groq_probe() -> dict:
         "status": response.status_code,
         "code": code,
         "message": message[:180],
-        "model": GROQ_MODEL,
+        "model": tested_model,
     }
 
 
