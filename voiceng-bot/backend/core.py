@@ -49,7 +49,8 @@ def embed(texts: list[str], task: str = "") -> list[list[float]]:
     return [list(vector) for vector in vectors]
 
 
-def search(query: str, persona: str) -> list[dict]:
+@lru_cache(maxsize=128)
+def _cached_search(query: str, persona: str) -> tuple[dict, ...]:
     vector = embed([query], "query")[0]
 
     pipeline = [
@@ -74,8 +75,12 @@ def search(query: str, persona: str) -> list[dict]:
         },
     ]
 
-    docs = list(db.chunks.aggregate(pipeline))
-    return [d for d in docs if d["score"] >= MIN_SCORE]
+    docs = [d for d in db.chunks.aggregate(pipeline) if d["score"] >= MIN_SCORE]
+    return tuple(docs)
+
+
+def search(query: str, persona: str) -> list[dict]:
+    return list(_cached_search(query, persona))
 
 
 def build_context(docs: list[dict]) -> str:

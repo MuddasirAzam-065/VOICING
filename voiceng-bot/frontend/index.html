@@ -252,7 +252,19 @@ function setBusy(value) {
 }
 
 async function api(path, options) {
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers: { Accept: "application/json", ...options?.headers } });
+  const request = { ...options, cache: "no-store", headers: { Accept: "application/json", ...options?.headers } };
+  let res;
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      res = await fetch(`${API_URL}${path}`, request);
+      break;
+    } catch (err) {
+      lastError = err;
+      if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 350));
+    }
+  }
+  if (!res) throw new Error(`Cannot reach the backend. Check your connection and try again. (${lastError?.message || "network error"})`);
   if (!res.ok) {
     let detail = `Request failed (${res.status})`;
     try {
@@ -431,7 +443,8 @@ async function sendMessage(text) {
   } catch (err) {
     console.error(err);
     typing.remove();
-    addMessage("assistant", "Sorry, something went wrong. Please try again.");
+    addMessage("assistant", `I couldn't complete that request. ${err.message}`);
+    statusEl.textContent = "Request failed. You can try sending it again.";
   } finally {
     setBusy(false);
   }
@@ -499,7 +512,7 @@ recordButton.addEventListener("click", async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioChunks = [];
 
-    const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"]
+    const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus", "audio/wav"]
       .find(type => MediaRecorder.isTypeSupported(type));
     const options = mimeType ? { mimeType } : {};
     const recorder = new MediaRecorder(stream, options);
@@ -514,7 +527,7 @@ recordButton.addEventListener("click", async () => {
       recordButton.textContent = "🎙";
 
       const type = (recorder.mimeType || "audio/webm").split(";")[0];
-      const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
+      const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : type.includes("wav") ? "wav" : "webm";
       const form = new FormData();
       form.append("audio", new Blob(audioChunks, { type }), `recording.${ext}`);
 
