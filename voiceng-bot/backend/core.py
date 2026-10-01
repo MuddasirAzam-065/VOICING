@@ -1,7 +1,9 @@
 import os
+import requests
 
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from dotenv import load_dotenv
 from huggingface_hub import InferenceClient
 from pymongo import MongoClient
@@ -10,12 +12,15 @@ from personas import PERSONAS, PROMPT
 
 load_dotenv()
 
-CHAT_MODEL = os.getenv("CHAT_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+CHAT_MODEL = os.getenv("CHAT_MODEL", "Qwen/Qwen2.5-3B-Instruct")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 STT_MODEL = os.getenv("STT_MODEL", "openai/whisper-large-v3-turbo")
 EMBED_DIM = int(os.getenv("EMBED_DIM", "384"))  # must match EMBED_MODEL
-TOP_K = 6
+TOP_K = 4
 MIN_SCORE = 0.60  # Atlas cosine score = (1 + cos) / 2. Tune this.
+_EMBED_POOL = ThreadPoolExecutor(max_workers=4)
+_GEMINI_SESSION = requests.Session()
 
 ERROR_MESSAGE = "Sorry, I'm having trouble answering right now. Please try again."
 
@@ -31,10 +36,17 @@ def _embed_one(text: str) -> list[float]:
     return vec.tolist()
 
 
+@lru_cache(maxsize=256)
+def _cached_embedding(text: str) -> tuple[float, ...]:
+    return tuple(_embed_one(text))
+
+
 def embed(texts: list[str], task: str = "") -> list[list[float]]:
     # `task` is kept so ingest.py needs no change; MiniLM doesn't use it.
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        return list(pool.map(_embed_one, texts))
+    if not texts:
+        return []
+    vectors = map(_cached_embedding, texts) if len(texts) == 1 else _EMBED_POOL.map(_cached_embedding, texts)
+    return [list(vector) for vector in vectors]
 
 
 def search(query: str, persona: str) -> list[dict]:
@@ -70,7 +82,7 @@ def build_context(docs: list[dict]) -> str:
     if not docs:
         return "No relevant knowledge-base content was found."
     return "\n\n".join(
-        f"SOURCE {i}\nTitle: {d['title']}\nURL: {d['url']}\n\n{d['text']}"
+        f"SOURCE {i}\nTitle: {d['title']}\nURL: {d['url']}\n\n{d['text'][:2800]}"
         for i, d in enumerate(docs, start=1)
     )
 
@@ -90,21 +102,55 @@ def answer_question(persona: str, question: str, history: list[dict]):
     messages.append({"role": "user", "content": question})
 
     try:
-        response = hf.chat_completion(
-            model=CHAT_MODEL,
-            messages=messages,
-            temperature=0.2,
-            max_tokens=500,
-        )
-        answer = (response.choices[0].message.content or "").strip() or ERROR_MESSAGE
+        if os.getenv("GEMINI_API_KEY"):
+            answer = _gemini_answer(system_prompt, history, question)
+        else:
+            response = hf.chat_completion(
+                model=CHAT_MODEL,
+                messages=messages,
+                temperature=0.2,
+                max_tokens=500,
+            )
+            answer = (response.choices[0].message.content or "").strip()
+        answer = answer or ERROR_MESSAGE
     except Exception as exc:
-        print("CHAT ERROR:", repr(exc))
+        # Avoid logging provider URLs, which can contain the existing API key.
+        print("CHAT ERROR:", type(exc).__name__)
         answer = ERROR_MESSAGE
 
     sources = list(dict.fromkeys(d["url"] for d in docs if d.get("url")))
     return answer, sources
 
 
+def _gemini_answer(system_prompt: str, history: list[dict], question: str) -> str:
+    contents = [
+        {
+            "role": "model" if item["role"] == "assistant" else "user",
+            "parts": [{"text": item["content"]}],
+        }
+        for item in history
+        if item.get("role") in {"user", "assistant"}
+    ]
+    contents.append({"role": "user", "parts": [{"text": question}]})
+    response = _GEMINI_SESSION.post(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+        params={"key": os.environ["GEMINI_API_KEY"]},
+        json={
+            "systemInstruction": {"parts": [{"text": system_prompt}]},
+            "contents": contents,
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 500},
+        },
+        timeout=25,
+    )
+    response.raise_for_status()
+    result = response.json()
+    return "".join(
+        part.get("text", "")
+        for part in result.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+    ).strip()
+
+
 def transcribe(audio_bytes: bytes, mime_type: str) -> str:
+    # The provider detects the codec from the uploaded bytes.
     result = hf.automatic_speech_recognition(audio_bytes, model=STT_MODEL)
     return (result.text or "").strip()

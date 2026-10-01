@@ -252,8 +252,15 @@ function setBusy(value) {
 }
 
 async function api(path, options) {
-  const res = await fetch(`${API_URL}${path}`, options);
-  if (!res.ok) throw new Error(await res.text());
+  const res = await fetch(`${API_URL}${path}`, { ...options, headers: { Accept: "application/json", ...options?.headers } });
+  if (!res.ok) {
+    let detail = `Request failed (${res.status})`;
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+    } catch {}
+    throw new Error(detail);
+  }
   return res.json();
 }
 
@@ -431,10 +438,39 @@ async function sendMessage(text) {
 }
 
 /* ---------- Text to speech ---------- */
-function speak(text) {
+function femaleEnglishVoice(voices) {
+  const english = voices.filter(voice => voice.lang.toLowerCase().startsWith("en"));
+  const femaleName = /female|samantha|victoria|karen|moira|tessa|zira|aria|jenny|susan|hazel|sara|google (us|uk) english/i;
+  return english.find(voice => femaleName.test(voice.name)) || english[0] || voices[0] || null;
+}
+
+function waitForVoices() {
+  const synth = window.speechSynthesis;
+  const voices = synth.getVoices();
+  if (voices.length) return Promise.resolve(voices);
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      synth.removeEventListener("voiceschanged", finish);
+      resolve(synth.getVoices());
+    };
+    synth.addEventListener("voiceschanged", finish);
+    setTimeout(finish, 1000);
+  });
+}
+
+async function speak(text) {
   if (muted || !("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+  const synth = window.speechSynthesis;
+  synth.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "en-US";
+  utterance.rate = 1;
+  const voice = femaleEnglishVoice(await waitForVoices());
+  if (voice) utterance.voice = voice;
+  if (!muted) synth.speak(utterance);
 }
 
 function renderMute() {
@@ -456,11 +492,16 @@ recordButton.addEventListener("click", async () => {
   }
 
   try {
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      throw new Error("Voice recording is not supported by this browser.");
+    }
     window.speechSynthesis?.cancel();
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioChunks = [];
 
-    const options = MediaRecorder.isTypeSupported("audio/webm") ? { mimeType: "audio/webm" } : {};
+    const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"]
+      .find(type => MediaRecorder.isTypeSupported(type));
+    const options = mimeType ? { mimeType } : {};
     const recorder = new MediaRecorder(stream, options);
     mediaRecorder = recorder;
 
@@ -472,7 +513,7 @@ recordButton.addEventListener("click", async () => {
       recordButton.classList.remove("recording");
       recordButton.textContent = "🎙";
 
-      const type = recorder.mimeType || "audio/webm";
+      const type = (recorder.mimeType || "audio/webm").split(";")[0];
       const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
       const form = new FormData();
       form.append("audio", new Blob(audioChunks, { type }), `recording.${ext}`);
@@ -502,7 +543,9 @@ recordButton.addEventListener("click", async () => {
     statusEl.textContent = "Recording... tap again to stop.";
   } catch (err) {
     console.error(err);
-    statusEl.textContent = "Microphone permission failed.";
+    statusEl.textContent = err.message === "Voice recording is not supported by this browser."
+      ? err.message
+      : "Microphone permission failed. Allow microphone access and use this page over HTTPS.";
   }
 });
 

@@ -23,6 +23,13 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+def ensure_message_indexes():
+    # These cover chat/history lookups and the conversation-list aggregation.
+    db.messages.create_index([("cid", 1), ("user_id", 1), ("created_at", 1)])
+    db.messages.create_index([("user_id", 1), ("created_at", -1)])
+
+
 class ChatRequest(BaseModel):
     cid: str | None = None
     persona: str = "voiceng"
@@ -47,6 +54,8 @@ def speech_to_text(audio: UploadFile = File(...)):
     data = audio.file.read()
     if not data:
         raise HTTPException(400, "Empty audio file.")
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(413, "Audio file is too large (15 MB maximum).")
 
     mime = (audio.content_type or "audio/webm").split(";")[0]
     try:
@@ -64,6 +73,10 @@ def chat(req: ChatRequest):
     message = req.message.strip()
     if not message:
         raise HTTPException(400, "Message cannot be empty.")
+    if len(message) > 4000:
+        raise HTTPException(413, "Message is too long (4,000 characters maximum).")
+    if not req.user_id.strip():
+        raise HTTPException(400, "user_id cannot be empty.")
 
     cid = req.cid or str(uuid.uuid4())
 
