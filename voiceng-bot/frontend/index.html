@@ -89,6 +89,11 @@
     white-space: pre-wrap; line-height: 1.5; max-width: 78%;
     overflow-wrap: anywhere;
   }
+  .message p { margin: 0 0 10px; }
+  .message p:last-child { margin-bottom: 0; }
+  .message ul, .message ol { margin: 6px 0 10px; padding-left: 24px; }
+  .message li { padding-left: 3px; margin: 4px 0; }
+  .message code { background: #f2f4f7; padding: 1px 4px; border-radius: 4px; }
   .message.user { background: #e8f0ff; margin-left: auto; }
   .message.assistant { background: #fff; border: 1px solid #eaecf0; margin-right: auto; }
 
@@ -277,12 +282,78 @@ async function api(path, options) {
 }
 
 /* ---------- Messages ---------- */
+function appendInlineMarkdown(parent, text) {
+  const pattern = /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|https?:\/\/[^\s]+)/g;
+  let start = 0;
+  for (const match of text.matchAll(pattern)) {
+    parent.append(document.createTextNode(text.slice(start, match.index)));
+    const value = match[0];
+    if (value.startsWith("**") || value.startsWith("__")) {
+      const strong = document.createElement("strong");
+      strong.textContent = value.slice(2, -2);
+      parent.append(strong);
+    } else if (value.startsWith("`")) {
+      const code = document.createElement("code");
+      code.textContent = value.slice(1, -1);
+      parent.append(code);
+    } else {
+      const link = document.createElement("a");
+      link.href = value;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = value;
+      parent.append(link);
+    }
+    start = match.index + value.length;
+  }
+  parent.append(document.createTextNode(text.slice(start)));
+}
+
+function renderMarkdown(parent, text) {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  let list = null;
+  let listType = "";
+
+  const closeList = () => {
+    if (list) parent.append(list);
+    list = null;
+    listType = "";
+  };
+
+  for (const line of lines) {
+    const bullet = line.match(/^\s*[-*]\s+(.+)$/);
+    const numbered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    if (bullet || numbered) {
+      const type = bullet ? "ul" : "ol";
+      if (!list || listType !== type) {
+        closeList();
+        list = document.createElement(type);
+        listType = type;
+      }
+      const item = document.createElement("li");
+      appendInlineMarkdown(item, (bullet || numbered)[1]);
+      list.append(item);
+      continue;
+    }
+
+    closeList();
+    if (!line.trim()) continue;
+    const paragraph = document.createElement("p");
+    const heading = line.match(/^#{1,3}\s+(.+)$/);
+    appendInlineMarkdown(paragraph, heading ? heading[1] : line);
+    if (heading) paragraph.style.fontWeight = "700";
+    parent.append(paragraph);
+  }
+  closeList();
+}
+
 function addMessage(role, text, sources = []) {
   removeWelcome();
 
   const div = document.createElement("div");
   div.className = `message ${role}`;
-  div.textContent = text;
+  if (role === "assistant") renderMarkdown(div, text);
+  else div.textContent = text;
   messagesEl.appendChild(div);
 
   if (role === "assistant" && sources.length) {
