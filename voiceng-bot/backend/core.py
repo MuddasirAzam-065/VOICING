@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import requests
 
@@ -14,6 +15,7 @@ from personas import PERSONAS, PROMPT
 load_dotenv()
 
 CHAT_MODEL = os.getenv("CHAT_MODEL", "Qwen/Qwen2.5-3B-Instruct")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 STT_MODEL = os.getenv("STT_MODEL", "openai/whisper-large-v3-turbo")
@@ -22,6 +24,7 @@ TOP_K = 4
 MIN_SCORE = 0.60  # Atlas cosine score = (1 + cos) / 2. Tune this.
 _EMBED_POOL = ThreadPoolExecutor(max_workers=4)
 _GEMINI_SESSION = requests.Session()
+_GROQ_SESSION = requests.Session()
 
 ERROR_MESSAGE = "Sorry, I'm having trouble answering right now. Please try again."
 PROVIDER_RETRIES = 2
@@ -82,7 +85,35 @@ def _cached_search(query: str, persona: str) -> tuple[dict, ...]:
 
 
 def search(query: str, persona: str) -> list[dict]:
-    return list(_cached_search(query, persona))
+    try:
+        return list(_cached_search(query, persona))
+    except Exception as exc:
+        print("VECTOR SEARCH ERROR:", type(exc).__name__)
+        return _keyword_search(query, persona)
+
+
+@lru_cache(maxsize=128)
+def _keyword_search(query: str, persona: str) -> tuple[dict, ...]:
+    terms = {
+        term.lower()
+        for term in re.findall(r"[a-zA-Z0-9]{3,}", query)
+        if term.lower() not in {"what", "where", "when", "which", "does", "about", "voice"}
+    }
+    if not terms:
+        return ()
+
+    docs = list(db.chunks.find(
+        {"persona": persona},
+        {"_id": 0, "text": 1, "url": 1, "title": 1},
+    ))
+    ranked = []
+    for doc in docs:
+        words = set(re.findall(r"[a-zA-Z0-9]{3,}", doc.get("text", "").lower()))
+        score = len(terms & words)
+        if score:
+            ranked.append((score, doc))
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    return tuple(doc for _, doc in ranked[:TOP_K])
 
 
 def build_context(docs: list[dict]) -> str:
@@ -116,6 +147,12 @@ def answer_question(persona: str, question: str, history: list[dict]):
     messages.append({"role": "user", "content": question})
 
     answer = ""
+    if os.getenv("GROQ_API_KEY"):
+        try:
+            answer = _groq_answer(messages)
+        except Exception as exc:
+            print("GROQ CHAT ERROR:", type(exc).__name__)
+
     if os.getenv("GEMINI_API_KEY"):
         try:
             answer = _gemini_answer(system_prompt, history, question)
@@ -186,6 +223,28 @@ def _hf_answer(messages: list[dict]) -> str:
     if last_error:
         raise last_error
     return ""
+
+
+def _groq_answer(messages: list[dict]) -> str:
+    response = _GROQ_SESSION.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": GROQ_MODEL,
+            "messages": messages,
+            "temperature": 0.2,
+            "max_tokens": 500,
+        },
+        timeout=25,
+    )
+    response.raise_for_status()
+    choices = response.json().get("choices") or []
+    if not choices:
+        return ""
+    return (choices[0].get("message", {}).get("content") or "").strip()
 
 
 def _retrieval_fallback(docs: list[dict], cfg: dict) -> str:
