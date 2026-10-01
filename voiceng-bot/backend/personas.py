@@ -22,11 +22,12 @@ KNOWLEDGE BASE CONTEXT:
 """
 
 PERSONAS = {
-    "voiceng": {
+        "voiceng": {
         "label": "VoiceNG AI Assistant",
         "org": "VoiceNG",
         "seed": os.getenv("SITE_URL", "").rstrip("/"),
         "max_pages": 100,
+        "render": True,   # site is JavaScript-rendered
     },
 
     "fia": {
