@@ -16,7 +16,12 @@ load_dotenv()
 
 CHAT_MODEL = os.getenv("CHAT_MODEL", "Qwen/Qwen2.5-3B-Instruct")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
-GROQ_FALLBACK_MODEL = "llama-3.3-70b-versatile"
+GROQ_PREFERRED_MODELS = (
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+)
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 STT_MODEL = os.getenv("STT_MODEL", "openai/whisper-large-v3-turbo")
@@ -232,24 +237,21 @@ def _hf_answer(messages: list[dict]) -> str:
 
 
 def _groq_answer(messages: list[dict]) -> str:
-    response = None
-    for model in dict.fromkeys((GROQ_MODEL, GROQ_FALLBACK_MODEL)):
-        response = _GROQ_SESSION.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model,
-                "messages": messages,
-                "temperature": 0.2,
-                "max_tokens": 500,
-            },
-            timeout=25,
-        )
-        if response.status_code != 404:
-            break
+    model = _groq_model()
+    response = _GROQ_SESSION.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model,
+            "messages": messages,
+            "temperature": 0.2,
+            "max_tokens": 500,
+        },
+        timeout=25,
+    )
     response.raise_for_status()
     choices = response.json().get("choices") or []
     if not choices:
@@ -257,28 +259,50 @@ def _groq_answer(messages: list[dict]) -> str:
     return (choices[0].get("message", {}).get("content") or "").strip()
 
 
+@lru_cache(maxsize=1)
+def _groq_model() -> str:
+    response = _GROQ_SESSION.get(
+        "https://api.groq.com/openai/v1/models",
+        headers={"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"},
+        timeout=15,
+    )
+    response.raise_for_status()
+    available = {
+        item.get("id") for item in response.json().get("data", [])
+        if item.get("id")
+    }
+    for model in (GROQ_MODEL, *GROQ_PREFERRED_MODELS):
+        if model in available:
+            return model
+    raise RuntimeError("Groq key has no supported chat model")
+
+
 def groq_probe() -> dict:
     if not os.getenv("GROQ_API_KEY"):
         return {"configured": False}
-    response = None
-    tested_model = GROQ_MODEL
-    for model in dict.fromkeys((GROQ_MODEL, GROQ_FALLBACK_MODEL)):
-        tested_model = model
-        response = _GROQ_SESSION.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": "Reply with OK."}],
-                "max_tokens": 4,
-            },
-            timeout=15,
-        )
-        if response.status_code != 404:
-            break
+    try:
+        tested_model = _groq_model()
+    except Exception as exc:
+        return {
+            "configured": True,
+            "ok": False,
+            "status": getattr(getattr(exc, "response", None), "status_code", None),
+            "code": type(exc).__name__,
+            "message": str(exc)[:180],
+        }
+    response = _GROQ_SESSION.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": tested_model,
+            "messages": [{"role": "user", "content": "Reply with OK."}],
+            "max_tokens": 4,
+        },
+        timeout=15,
+    )
     if response.ok:
         return {"configured": True, "ok": True, "model": tested_model}
     try:
