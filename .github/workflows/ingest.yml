@@ -28,12 +28,11 @@ jobs:
       - name: "1. Locate backend folder"
         id: find
         run: |
-          FILE=$(find . -name ingest.py -not -path './.git/*' | head -1)
-          if [ -z "$FILE" ]; then
-            echo "::error title=ingest.py not found::Push it to main."
+          if [ ! -f voiceng-bot/backend/ingest.py ]; then
+            echo "::error title=ingest.py not found::Expected voiceng-bot/backend/ingest.py"
             exit 1
           fi
-          echo "dir=$(dirname "$FILE")" >> "$GITHUB_OUTPUT"
+          echo "dir=voiceng-bot/backend" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-python@v6
         with:
