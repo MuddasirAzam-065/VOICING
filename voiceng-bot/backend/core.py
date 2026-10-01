@@ -94,7 +94,14 @@ def build_context(docs: list[dict]) -> str:
 
 def answer_question(persona: str, question: str, history: list[dict]):
     cfg = PERSONAS[persona]
-    docs = search(f"{cfg['org']} {question}", persona)
+    # A temporary embedding or Atlas outage should not turn the whole /chat
+    # request into a 500. The prompt tells the model to say when facts are
+    # unavailable, so it can still answer gracefully without retrieved facts.
+    try:
+        docs = search(f"{cfg['org']} {question}", persona)
+    except Exception as exc:
+        print("SEARCH ERROR:", type(exc).__name__)
+        docs = []
 
     system_prompt = PROMPT.format(
         label=cfg["label"],
@@ -106,10 +113,18 @@ def answer_question(persona: str, question: str, history: list[dict]):
     messages += [{"role": m["role"], "content": m["content"]} for m in history]
     messages.append({"role": "user", "content": question})
 
-    try:
-        if os.getenv("GEMINI_API_KEY"):
+    answer = ""
+    if os.getenv("GEMINI_API_KEY"):
+        try:
             answer = _gemini_answer(system_prompt, history, question)
-        else:
+        except Exception as exc:
+            # Gemini free-tier quotas and transient service failures can reject
+            # requests. HF_TOKEN is already required for embeddings/STT, so use
+            # its configured chat model as an automatic backup.
+            print("GEMINI CHAT ERROR:", type(exc).__name__)
+
+    if not answer:
+        try:
             response = hf.chat_completion(
                 model=CHAT_MODEL,
                 messages=messages,
@@ -117,11 +132,10 @@ def answer_question(persona: str, question: str, history: list[dict]):
                 max_tokens=500,
             )
             answer = (response.choices[0].message.content or "").strip()
-        answer = answer or ERROR_MESSAGE
-    except Exception as exc:
-        # Avoid logging provider URLs, which can contain the existing API key.
-        print("CHAT ERROR:", type(exc).__name__)
-        answer = ERROR_MESSAGE
+        except Exception as exc:
+            print("HF CHAT ERROR:", type(exc).__name__)
+
+    answer = answer or ERROR_MESSAGE
 
     sources = list(dict.fromkeys(d["url"] for d in docs if d.get("url")))
     return answer, sources
