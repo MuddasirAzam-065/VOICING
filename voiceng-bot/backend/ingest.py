@@ -25,28 +25,46 @@ def normalize(url: str) -> str:
     return urlparse(url)._replace(fragment="").geturl().rstrip("/")
 
 
+def canonical_host(host: str) -> str:
+    host = host.lower().split(":", 1)[0]
+    return host[4:] if host.startswith("www.") else host
+
+
+def is_internal_host(host: str, root_host: str) -> bool:
+    host = canonical_host(host)
+    return host == root_host or host.endswith(f".{root_host}")
+
+
 def extract(html: str, base_url: str):
     soup = BeautifulSoup(html, "html.parser")
-    for tag in soup(["script", "style", "noscript", "nav", "footer", "header", "form", "aside"]):
+    for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
 
     main = soup.find("main") or soup.find("article") or soup.body or soup
     title = soup.title.get_text(" ", strip=True) if soup.title else ""
 
     parts = []
-    for el in main.find_all(["h1", "h2", "h3", "h4", "p", "li", "td"]):
+    for el in main.find_all(["h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "td", "address"]):
         text = el.get_text(" ", strip=True)
         if text:
             parts.append(f"## {text}" if el.name.startswith("h") else text)
-    text = "\n".join(parts)
+    links = []
+    for anchor in soup.find_all("a", href=True):
+        href = anchor["href"].strip()
+        if not href or href.lower().startswith(("javascript:", "data:")):
+            continue
+        link = normalize(urljoin(base_url, href))
+        links.append(link)
+        if link.lower().startswith(("mailto:", "tel:")):
+            label = anchor.get_text(" ", strip=True)
+            parts.append(f"Contact: {label} ({link})" if label else f"Contact: {link}")
+    text = "\n".join(dict.fromkeys(parts))
 
     # fallback for pages built from plain <div>/<span> elements
     if len(text.split()) < 30:
         lines = [l.strip() for l in main.get_text("\n").splitlines() if l.strip()]
-        text = "\n".join(lines)
-
-    links = [normalize(urljoin(base_url, a["href"])) for a in soup.find_all("a", href=True)]
-    return title, text, links
+        text = "\n".join(dict.fromkeys(lines))
+    return title, text, list(dict.fromkeys(links))
 
 
 def crawl(persona: str) -> list[dict]:
@@ -56,7 +74,7 @@ def crawl(persona: str) -> list[dict]:
         raise RuntimeError(f"No seed URL configured for {persona}")
 
     render = cfg.get("render", False)
-    host = urlparse(seed).netloc
+    host = canonical_host(urlparse(seed).netloc)
     queue, visited, pages = deque([normalize(seed)]), set(), []
     session = requests.Session()
     session.headers.update({
@@ -111,7 +129,10 @@ def crawl(persona: str) -> list[dict]:
                 pages.append({"url": normalize(final_url), "title": title, "text": text})
 
             for link in links:
-                if urlparse(link).netloc == host and link not in visited:
+                parsed = urlparse(link)
+                if parsed.scheme not in {"http", "https"}:
+                    continue
+                if is_internal_host(parsed.netloc, host) and link not in visited:
                     queue.append(link)
             time.sleep(0.15)
     finally:
